@@ -175,6 +175,7 @@ const IssueCard = ({ issue, onClick }) => (
             src={img}
             alt="Preview"
             className="w-10 h-10 rounded-md object-cover border border-slate-200"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
         ))}
         {issue.imageUrls.length > 3 && (
@@ -230,7 +231,7 @@ const IssuesPage = () => {
   const [fileErrors, setFileErrors] = useState({});
 
   const [filteredIssues, setFilteredIssues] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');  
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [filters, setFilters] = useState({
     status: '',
@@ -307,7 +308,7 @@ const IssuesPage = () => {
 
   const validateImageFiles = (files) => {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    const maxSize = 5 * 1024 * 1024; 
+    const maxSize = 5 * 1024 * 1024;
     const errors = [];
     const validFiles = [];
 
@@ -326,7 +327,7 @@ const IssuesPage = () => {
 
   const validateSupportingFiles = (files) => {
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-    const maxSize = 10 * 1024 * 1024; 
+    const maxSize = 10 * 1024 * 1024;
     const errors = [];
     const validFiles = [];
 
@@ -669,25 +670,41 @@ const IssuesPage = () => {
       description: selectedIssue.description || '',
       building: selectedIssue.building || '',
       locationText: selectedIssue.locationText || '',
-      imageUrl: selectedIssue.imageUrl || '',
+      imageUrl: selectedIssue.imageUrls && selectedIssue.imageUrls.length > 0 ? selectedIssue.imageUrls[0] : '',
     });
+    setErrors({});
   };
 
   const handleSaveEdit = async () => {
     if (!editData) return;
-    const validationErrors = validateForm(editData);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+
+    // Create a clean update payload - only send fields that exist
+    const updatePayload = {};
+
+    if (editData.title) updatePayload.title = editData.title;
+    if (editData.category) updatePayload.category = editData.category;
+    if (editData.description) updatePayload.description = editData.description;
+    if (editData.building !== undefined) updatePayload.building = editData.building;
+    if (editData.locationText !== undefined) updatePayload.locationText = editData.locationText;
+    if (editData.imageUrl !== undefined) updatePayload.imageUrl = [editData.imageUrl];
+
     try {
-      await issueApi.update(selectedIssue.id, {
-        ...editData
-      });
+      setLoading(true);
+      await issueApi.update(selectedIssue.id, updatePayload);
       setEditData(null);
+      setErrors({});
       await loadIssueDetails(selectedIssue.id);
+      // Also refresh the main list in background
+      loadIssues();
     } catch (err) {
       console.error('Update failed:', err);
+      if (err.response?.status === 400) {
+        setErrors(err.response.data || {});
+      } else {
+        alert(err.response?.data?.message || 'Failed to update issue.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1492,15 +1509,16 @@ const IssuesPage = () => {
                     <input
                       value={editData.title}
                       onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold', errors.title && 'border-red-500')}
+                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.title && 'border-red-500')}
                     />
+                    {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category</label>
                     <select
                       value={editData.category}
                       onChange={(e) => setEditData({ ...editData, category: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold"
+                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20"
                     >
                       {CATEGORY_OPTIONS.map((category) => (
                         <option key={category} value={category}>{category.replace('_', ' ')}</option>
@@ -1513,45 +1531,43 @@ const IssuesPage = () => {
                       rows="3"
                       value={editData.description}
                       onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold', errors.description && 'border-red-500')}
-                    ></textarea>
+                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.description && 'border-red-500')}
+                    />
+                    {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Building</label>
                     <input
                       value={editData.building}
                       onChange={(e) => setEditData({ ...editData, building: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold', errors.building && 'border-red-500')}
+                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.building && 'border-red-500')}
                     />
+                    {errors.building && <p className="text-xs text-red-500 mt-1">{errors.building}</p>}
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Location Text</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Location</label>
                     <input
                       value={editData.locationText}
                       onChange={(e) => setEditData({ ...editData, locationText: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold"
+                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image URL</label>
-                    <input
-                      value={editData.imageUrl}
-                      onChange={(e) => setEditData({ ...editData, imageUrl: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold"
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex gap-3">
+                  <div className="md:col-span-2 flex gap-3 pt-2">
                     <button
-                      onClick={() => setEditData(null)}
-                      className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest"
+                      onClick={() => {
+                        setEditData(null);
+                        setErrors({});
+                      }}
+                      className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveEdit}
-                      className="flex-1 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest"
+                      disabled={loading}
+                      className="flex-1 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-50"
                     >
-                      Save Changes
+                      {loading ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </div>
