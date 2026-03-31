@@ -1,3 +1,5 @@
+
+
 package com.example.academic_support_portal.issue.service;
 
 import com.example.academic_support_portal.issue.dto.IssueAssignRequest;
@@ -22,6 +24,7 @@ import com.example.academic_support_portal.user.model.User;
 import com.example.academic_support_portal.user.repository.UserRepository;
 import com.example.academic_support_portal.notification.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -42,6 +45,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IssueService {
 
   private final IssueRepository issueRepository;
@@ -114,8 +118,7 @@ public class IssueService {
           user.getName(),
           token,
           saved.getImageUrls(),
-          saved.getSupportingDocs()
-      );
+          saved.getSupportingDocs());
     } catch (Exception e) {
       System.err.println("Failed to send email: " + e.getMessage());
     }
@@ -184,45 +187,172 @@ public class IssueService {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to update this issue");
     }
 
+    // Store old values before updating (for email notification)
+    String oldCategory = issue.getCategory();
+    String oldTitle = issue.getTitle();
+    String oldDescription = issue.getDescription();
+    String oldBuilding = issue.getBuilding();
+    String oldLocationText = issue.getLocationText();
+
+    boolean hasChanges = false;
+
     if (StringUtils.hasText(request.getTitle())) {
       issue.setTitle(request.getTitle());
+      hasChanges = true;
     }
     if (StringUtils.hasText(request.getCategory())) {
       issue.setCategory(request.getCategory());
+      hasChanges = true;
     }
     if (StringUtils.hasText(request.getDescription())) {
       issue.setDescription(request.getDescription());
+      hasChanges = true;
     }
     if (request.getImageUrls() != null) {
       issue.setImageUrls(request.getImageUrls());
+      hasChanges = true;
     }
     if (request.getSupportingDocs() != null) {
       issue.setSupportingDocs(request.getSupportingDocs());
+      hasChanges = true;
     }
     if (request.getBuilding() != null) {
       issue.setBuilding(request.getBuilding());
+      hasChanges = true;
     }
     if (request.getLocationText() != null) {
       issue.setLocationText(request.getLocationText());
+      hasChanges = true;
     }
     if (request.getLatitude() != null) {
       issue.setLatitude(request.getLatitude());
+      hasChanges = true;
     }
     if (request.getLongitude() != null) {
       issue.setLongitude(request.getLongitude());
+      hasChanges = true;
     }
     if (request.getPriority() != null) {
       issue.setPriority(request.getPriority());
+      hasChanges = true;
     }
     if (isAdmin && request.getAdminNotes() != null) {
       issue.setAdminNotes(request.getAdminNotes());
+      hasChanges = true;
+    }
+
+    // Also handle floor if present in request
+    if (request.getFloor() != null) {
+      issue.setFloor(request.getFloor());
+      hasChanges = true;
+    }
+
+    // Handle academic fields if present
+    if (request.getAcademicIssueCategory() != null) {
+      issue.setAcademicIssueCategory(request.getAcademicIssueCategory());
+      hasChanges = true;
+    }
+    if (request.getFaculty() != null) {
+      issue.setFaculty(request.getFaculty());
+      hasChanges = true;
+    }
+    if (request.getModuleCode() != null) {
+      issue.setModuleCode(request.getModuleCode());
+      hasChanges = true;
     }
 
     ensureLocationProvided(issue.getBuilding(), issue.getLocationText());
     issue.setUpdatedAt(LocalDateTime.now());
 
     CampusIssue saved = issueRepository.save(issue);
+
+    // Add timeline entry for the update
+    if (hasChanges) {
+      String changeSummary = buildChangeSummary(oldTitle, saved.getTitle(), oldCategory, saved.getCategory(),
+          oldDescription, saved.getDescription(), oldBuilding, saved.getBuilding(),
+          oldLocationText, saved.getLocationText());
+
+      commentRepository.save(IssueComment.builder()
+          .issueId(saved.getId())
+          .userId(user.getId())
+          .userName(user.getName())
+          .message("Issue updated: " + changeSummary)
+          .type(IssueTimelineType.COMMENT)
+          .createdAt(LocalDateTime.now())
+          .build());
+
+      // Send email notifications
+      try {
+        // Get student email (reporter)
+        String studentEmail = saved.getStudentEmail();
+        String studentName = saved.getCreatedByName();
+
+        // Get location for email
+        String location = saved.getBuilding() != null ? saved.getBuilding() : saved.getLocationText();
+        if (location == null)
+          location = "Not specified";
+
+        // Prepare image URLs and supporting docs
+        List<String> imageUrls = saved.getImageUrls() != null ? saved.getImageUrls() : new ArrayList<>();
+        List<SupportingDocument> supportingDocs = saved.getSupportingDocs() != null ? saved.getSupportingDocs()
+            : new ArrayList<>();
+
+        // Send update email - pass the existing token
+        // Get existing token from database
+        String existingToken = updateTokenRepository.findByIssueId(saved.getId())
+            .map(UpdateToken::getToken)
+            .orElse(null);
+
+        emailService.sendIssueUpdateEmail(
+            oldCategory,
+            saved.getCategory(),
+            saved.getId(),
+            saved.getTitle(),
+            saved.getDescription(),
+            location,
+            user.getName(),
+            studentEmail,
+            studentName,
+            imageUrls,
+            supportingDocs,
+            existingToken);
+      } catch (Exception e) {
+        log.error("Failed to send issue update email for issueId={}: {}", saved.getId(), e.getMessage());
+      }
+    }
+
     return toResponse(saved);
+  }
+
+  /**
+   * Build a summary of changes for the timeline comment
+   */
+  private String buildChangeSummary(String oldTitle, String newTitle, String oldCategory, String newCategory,
+      String oldDescription, String newDescription, String oldBuilding, String newBuilding,
+      String oldLocationText, String newLocationText) {
+
+    List<String> changes = new ArrayList<>();
+
+    if (!oldTitle.equals(newTitle)) {
+      changes.add("title changed from '" + oldTitle + "' to '" + newTitle + "'");
+    }
+    if (!oldCategory.equals(newCategory)) {
+      changes.add("category changed from " + oldCategory + " to " + newCategory);
+    }
+    if (!oldDescription.equals(newDescription)) {
+      changes.add("description updated");
+    }
+    if (oldBuilding != null && !oldBuilding.equals(newBuilding) && newBuilding != null) {
+      changes.add("building changed from " + oldBuilding + " to " + newBuilding);
+    }
+    if (oldLocationText != null && !oldLocationText.equals(newLocationText) && newLocationText != null) {
+      changes.add("location changed from " + oldLocationText + " to " + newLocationText);
+    }
+
+    if (changes.isEmpty()) {
+      return "details updated";
+    }
+    return String.join(", ", changes);
   }
 
   public void deleteIssue(String id) {
@@ -335,71 +465,71 @@ public class IssueService {
 
     CampusIssue issue = issueRepository.findById(updateToken.getIssueId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Issue not found"));
-    
+
     IssueStatus newStatus;
     try {
       newStatus = IssueStatus.valueOf(status);
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status: " + status);
     }
-    
+
     if (issue.getStatus() == IssueStatus.RESOLVED || issue.getStatus() == IssueStatus.REJECTED) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "This issue is already " + issue.getStatus() + " and cannot be changed");
     }
 
     if (issue.getStatus() == newStatus) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-            "Issue is already " + newStatus);
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Issue is already " + newStatus);
     }
-    
+
     IssueStatus oldStatus = issue.getStatus();
-    
+
     issue.setStatus(newStatus);
     issue.setUpdatedAt(LocalDateTime.now());
-    
+
     if (note != null && !note.trim().isEmpty()) {
-        String existingNotes = issue.getAdminNotes();
-        if (existingNotes != null && !existingNotes.isEmpty()) {
-            issue.setAdminNotes(existingNotes + "\n[" + LocalDateTime.now() + "] " + note);
-        } else {
-            issue.setAdminNotes("[" + LocalDateTime.now() + "] " + note);
-        }
+      String existingNotes = issue.getAdminNotes();
+      if (existingNotes != null && !existingNotes.isEmpty()) {
+        issue.setAdminNotes(existingNotes + "\n[" + LocalDateTime.now() + "] " + note);
+      } else {
+        issue.setAdminNotes("[" + LocalDateTime.now() + "] " + note);
+      }
     }
-    
+
     CampusIssue saved = issueRepository.save(issue);
-    
+
     if (newStatus == IssueStatus.RESOLVED || newStatus == IssueStatus.REJECTED) {
-        updateToken.setIsUsed(true);
-        updateToken.setUsedByEmail(userEmail);
-        updateToken.setUsedAt(LocalDateTime.now().toString());
-        updateTokenRepository.save(updateToken);
+      updateToken.setIsUsed(true);
+      updateToken.setUsedByEmail(userEmail);
+      updateToken.setUsedAt(LocalDateTime.now().toString());
+      updateTokenRepository.save(updateToken);
     }
-    
+
     commentRepository.save(IssueComment.builder()
         .issueId(saved.getId())
         .userId("system")
         .userName("System")
-        .message(String.format("Status updated from %s to %s via email", oldStatus, newStatus) + 
-        (note != null && !note.isEmpty() ? ": " + note : ""))
+        .message(String.format("Status updated from %s to %s via email", oldStatus, newStatus) +
+            (note != null && !note.isEmpty() ? ": " + note : ""))
         .type(IssueTimelineType.STATUS_CHANGE)
         .createdAt(LocalDateTime.now())
         .build());
-    
+
     return toResponse(saved);
   }
 
   public IssueCommentResponse addNoteViaToken(String token, String note, String userEmail) {
     UpdateToken updateToken = updateTokenRepository.findByToken(token)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid or expired token"));
-    
+
     CampusIssue issue = issueRepository.findById(updateToken.getIssueId())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Issue not found"));
-    
+
     if (note == null || note.trim().isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Note cannot be empty");
     }
-    
+
     IssueComment comment = commentRepository.save(IssueComment.builder()
         .issueId(issue.getId())
         .userId("system")
@@ -408,12 +538,12 @@ public class IssueService {
         .type(IssueTimelineType.NOTE)
         .createdAt(LocalDateTime.now())
         .build());
-    
+
     updateToken.setIsUsed(true);
     updateToken.setUsedByEmail(userEmail);
     updateToken.setUsedAt(LocalDateTime.now().toString());
     updateTokenRepository.save(updateToken);
-    
+
     return toCommentResponse(comment);
   }
 
@@ -458,7 +588,7 @@ public class IssueService {
     departmentEmails.put("SECURITY", "kkdsashani@gmail.com");
     departmentEmails.put("ACADEMIC", "kkdsashani@gmail.com");
     departmentEmails.put("OTHER", "kkdsashani@gmail.com");
-    
+
     return departmentEmails.getOrDefault(category, "kkdsashani@gmail.com");
   }
 

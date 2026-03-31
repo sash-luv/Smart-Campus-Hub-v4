@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface UpdateTokenRepository extends MongoRepository<UpdateToken, String> {
     Optional<UpdateToken> findByToken(String token);
+    Optional<UpdateToken> findByIssueId(String issueId);
     void deleteByIssueId(String issueId);
 }

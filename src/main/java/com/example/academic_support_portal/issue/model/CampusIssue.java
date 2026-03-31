@@ -57,4 +57,13 @@ public class CampusIssue {
   private LocalDateTime updatedAt;
 
   private String studentEmail;
+
+  private String floor;
+
+  private String academicIssueCategory;
+
+  private String faculty;
+  
+  private String moduleCode;
+
 }

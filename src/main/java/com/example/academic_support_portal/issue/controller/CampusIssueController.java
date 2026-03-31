@@ -28,6 +28,7 @@ public class CampusIssueController {
 
   private final IssueService issueService;
 
+
   @GetMapping
   public List<IssueResponse> getAllIssues(
       @RequestParam(required = false) IssueStatus status,
@@ -39,6 +40,7 @@ public class CampusIssueController {
       @RequestParam(required = false) String keyword) {
     return issueService.getAllIssues(status, category, building, priority, assignedToUserId, createdByUserId, keyword);
   }
+
 
   @GetMapping("/{id}")
   public IssueResponse getIssueById(@PathVariable String id) {
@@ -81,6 +83,7 @@ public class CampusIssueController {
     return issueService.addComment(id, request);
   }
 
+
   @GetMapping("/{id}/comments")
   public List<IssueCommentResponse> getComments(@PathVariable String id) {
     return issueService.getCommentsByIssue(id);
@@ -89,6 +92,7 @@ public class CampusIssueController {
   /**
  * Endpoint for one-click status update from email (returns HTML)
  */
+
 @GetMapping("/update-status")
 public ResponseEntity<String> updateStatusViaToken(
         @RequestParam String token,
@@ -124,6 +128,7 @@ public ResponseEntity<String> updateStatusViaToken(
     
     return ResponseEntity.ok(html);
 }
+
 
 /**
  * Endpoint for adding a note via token from email
@@ -162,8 +167,9 @@ public ResponseEntity<String> addNoteViaToken(
             """, token);
         return ResponseEntity.ok(html);
     }
+
     
-    String userEmail = request.getRemoteAddr();
+        String userEmail = request.getRemoteAddr();
     IssueCommentResponse response = issueService.addNoteViaToken(token, note, userEmail);
     
     String html = String.format("""
@@ -191,3 +197,4 @@ public ResponseEntity<String> addNoteViaToken(
     return ResponseEntity.ok(html);
 }
 }
+

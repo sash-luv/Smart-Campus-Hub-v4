@@ -1,11 +1,16 @@
 package com.example.academic_support_portal.notification;
 
+import com.example.academic_support_portal.issue.model.UpdateToken;
 import com.example.academic_support_portal.tutor.model.TutoringSession;
 import com.example.academic_support_portal.tutor_request.model.TutorRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -28,6 +33,8 @@ public class EmailService {
 
   @Value("${app.mail.enabled:false}")
   private boolean mailEnabled;
+
+  // ========== TUTORING EMAIL METHODS ==========
 
   public void sendTutorRequestEmailToTutor(TutorRequest request) {
     if (!mailEnabled) {
@@ -303,7 +310,8 @@ public class EmailService {
     }
 
     String subject = String.format("[%s] New Issue Report: %s", category, title);
-    String body = buildNewIssueEmailBody(issueId, title, category, description, location, priority, createdAt, reporterName, updateToken, imageUrls, supportingDocs);
+    String body = buildNewIssueEmailBody(issueId, title, category, description, location, priority, createdAt,
+        reporterName, updateToken, imageUrls, supportingDocs);
 
     sendPlainText(departmentEmail, subject, body);
     log.info("New issue email sent to {} for issueId={}", departmentEmail, issueId);
@@ -365,6 +373,91 @@ public class EmailService {
     log.info("Comment email sent to {} for issueId={}", departmentEmail, issueId);
   }
 
+  public void sendIssueUpdateEmail(
+      String oldCategory,
+      String newCategory,
+      String issueId,
+      String title,
+      String description,
+      String location,
+      String updatedBy,
+      String studentEmail,
+      String studentName,
+      List<String> imageUrls,
+      List<?> supportingDocs,
+      String existingToken) {
+
+    if (!mailEnabled) {
+      log.info("Mail sending is disabled. Skipping issue update email. issueId={}", issueId);
+      return;
+    }
+
+    String frontendBaseUrl = frontendUrl != null ? frontendUrl : "http://localhost:5173";
+    String studentViewLink = frontendBaseUrl + "/issues/" + issueId;
+
+    boolean categoryChanged = oldCategory != null && !oldCategory.equals(newCategory);
+
+    // 1. Always notify student (reporter)
+    if (studentEmail != null && !studentEmail.isBlank()) {
+      String studentSubject = "Update on Your Issue Report: " + title;
+      String studentBody = buildStudentUpdateEmailBody(issueId, title, description, location, updatedBy,
+          studentViewLink);
+      sendPlainText(studentEmail, studentSubject, studentBody);
+      log.info("Update email sent to student: {} for issueId={}", studentEmail, issueId);
+    }
+
+    // 2. Handle based on whether category changed or not
+    if (categoryChanged) {
+      // Category CHANGED - New department gets NEW ISSUE EMAIL (EXACTLY same as new
+      // report)
+      String newDepartmentEmail = getDepartmentEmail(newCategory);
+      if (newDepartmentEmail != null && !newDepartmentEmail.isBlank()) {
+        // Generate NEW token for the new department
+        String newToken = UUID.randomUUID().toString();
+
+        // Use the SAME email template as new issue report
+        String newDeptSubject = String.format("[%s] New Issue Report: %s", newCategory, title);
+        String newDeptBody = buildNewIssueEmailBody(
+            issueId, title, newCategory, description, location,
+            "MEDIUM", // Default priority
+            LocalDateTime.now().toString(),
+            studentName,
+            newToken,
+            imageUrls,
+            supportingDocs);
+        sendPlainText(newDepartmentEmail, newDeptSubject, newDeptBody);
+        log.info("NEW ISSUE EMAIL (same as new report) sent to new department: {} for issueId={}", newDepartmentEmail,
+            issueId);
+      }
+
+      // Category CHANGED - Old department gets TRANSFER NOTIFICATION
+      String oldDepartmentEmail = getDepartmentEmail(oldCategory);
+      String newDepartmentEmailForCheck = getDepartmentEmail(newCategory);
+      if (oldDepartmentEmail != null && !oldDepartmentEmail.isBlank() &&
+          !oldDepartmentEmail.equals(newDepartmentEmailForCheck)) {
+        String oldDeptSubject = String.format("[TRANSFERRED] Issue #%s: %s", issueId, title);
+        String oldDeptBody = buildOldDepartmentTransferEmailBody(
+            issueId, title, description, location, updatedBy, oldCategory, newCategory, studentName);
+        sendPlainText(oldDepartmentEmail, oldDeptSubject, oldDeptBody);
+        log.info("TRANSFER NOTIFICATION sent to old department: {} for issueId={}", oldDepartmentEmail, issueId);
+      }
+    } else {
+      // Category SAME - Send UPDATE email to current department with token link
+      String currentDepartmentEmail = getDepartmentEmail(newCategory);
+      if (currentDepartmentEmail != null && !currentDepartmentEmail.isBlank()) {
+        // Use the public view with token so they can update status
+        String departmentViewLink = frontendBaseUrl + "/public/issue/" + issueId + "?token=" + existingToken;
+
+        String currentDeptSubject = String.format("[UPDATE] Issue #%s: %s", issueId, title);
+        String currentDeptBody = buildDepartmentUpdateEmailBody(
+            issueId, title, description, location, updatedBy, newCategory, departmentViewLink, imageUrls,
+            supportingDocs);
+        sendPlainText(currentDepartmentEmail, currentDeptSubject, currentDeptBody);
+        log.info("UPDATE EMAIL sent to current department: {} for issueId={}", currentDepartmentEmail, issueId);
+      }
+    }
+  }
+
   // ========== HELPER METHODS FOR ISSUE EMAILS ==========
 
   private String buildNewIssueEmailBody(
@@ -394,47 +487,17 @@ public class EmailService {
     body.append("Location     : ").append(safe(location)).append("\n");
     body.append("\nDescription:\n").append(safe(description)).append("\n");
 
-    // Add images if any
-    if (imageUrls != null && !imageUrls.isEmpty()) {
-      body.append("\n========================================\n");
-      body.append("IMAGES\n");
-      body.append("========================================\n");
-      for (int i = 0; i < imageUrls.size(); i++) {
-        body.append("Image ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
-      }
-    }
-
-    // Add documents if any
-    if (supportingDocs != null && !supportingDocs.isEmpty()) {
-      body.append("\n========================================\n");
-      body.append("SUPPORTING DOCUMENTS\n");
-      body.append("========================================\n");
-      for (Object doc : supportingDocs) {
-        // Try to get name if it's a SupportingDocument object
-        try {
-          java.lang.reflect.Method getName = doc.getClass().getMethod("getName");
-          String docName = (String) getName.invoke(doc);
-          body.append("Document: ").append(safe(docName)).append("\n");
-        } catch (Exception e) {
-          body.append("Document available\n");
-        }
-      }
-    }
-
-  body.append("\n========================================\n");
-body.append("QUICK ACTIONS\n");
-body.append("========================================\n");
-
-String frontendBaseUrl = frontendUrl != null ? frontendUrl : "http://localhost:5173";
-
-body.append("\nView Full Report:\n");
-body.append(frontendBaseUrl).append("/public/issue/").append(issueId)
-    .append("?token=").append(updateToken).append("\n\n");
-
-body.append("========================================\n");
-body.append("This is an automated message from the Campus Issue Reporter.\n");
-body.append("Click the link above to view and update the issue status.\n");
-body.append("========================================\n");
+    String frontendBaseUrl = frontendUrl != null ? frontendUrl : "http://localhost:5173";
+    body.append("\n========================================\n");
+    body.append("QUICK ACTIONS\n");
+    body.append("========================================\n");
+    body.append("\nView Full Report:\n");
+    body.append(frontendBaseUrl).append("/public/issue/").append(issueId)
+        .append("?token=").append(updateToken).append("\n\n");
+    body.append("========================================\n");
+    body.append("This is an automated message from the Campus Issue Reporter.\n");
+    body.append("Click the link above to view and update the issue status.\n");
+    body.append("========================================\n");
 
     return body.toString();
   }
@@ -464,7 +527,6 @@ body.append("========================================\n");
 
     body.append("\nView your issue:\n");
     body.append(frontendUrl).append("/issues/").append(issueId).append("\n\n");
-
     body.append("========================================\n");
     body.append("Regards,\n");
     body.append("Campus Issue Reporter\n");
@@ -487,14 +549,167 @@ body.append("========================================\n");
     body.append("Title        : ").append(safe(title)).append("\n");
     body.append("Commented by : ").append(safe(commenterName)).append("\n\n");
     body.append("Comment:\n").append(safe(comment)).append("\n\n");
-
     body.append("View the issue:\n");
     body.append(frontendUrl).append("/issues/").append(issueId).append("\n\n");
-
     body.append("========================================\n");
     body.append("Regards,\n");
     body.append("Campus Issue Reporter\n");
 
     return body.toString();
+  }
+
+  private String buildStudentUpdateEmailBody(
+      String issueId,
+      String title,
+      String description,
+      String location,
+      String updatedBy,
+      String viewLink) {
+
+    StringBuilder body = new StringBuilder();
+    body.append("Hello,\n\n");
+    body.append("Your reported issue has been updated by ").append(safe(updatedBy)).append(".\n\n");
+    body.append("========================================\n");
+    body.append("ISSUE UPDATE\n");
+    body.append("========================================\n");
+    body.append("Issue ID    : ").append(issueId).append("\n");
+    body.append("Title       : ").append(safe(title)).append("\n");
+    body.append("Location    : ").append(safe(location)).append("\n");
+    body.append("Description : ").append(safe(description)).append("\n\n");
+    body.append("Status      : Please check the portal for current status\n\n");
+    body.append("View your issue:\n");
+    body.append(viewLink).append("\n\n");
+    body.append("========================================\n");
+    body.append("Regards,\n");
+    body.append("Campus Issue Reporter\n");
+
+    return body.toString();
+  }
+
+  /**
+   * Build email body for department update notification (when category doesn't
+   * change)
+   * Uses public view link with token so department can update status
+   */
+  private String buildDepartmentUpdateEmailBody(
+      String issueId,
+      String title,
+      String description,
+      String location,
+      String updatedBy,
+      String category,
+      String viewLink,
+      List<String> imageUrls,
+      List<?> supportingDocs) {
+
+    StringBuilder body = new StringBuilder();
+    body.append("An existing issue has been updated.\n\n");
+    body.append("========================================\n");
+    body.append("ISSUE DETAILS\n");
+    body.append("========================================\n");
+    body.append("Issue ID    : ").append(issueId).append("\n");
+    body.append("Category    : ").append(safe(category)).append("\n");
+    body.append("Title       : ").append(safe(title)).append("\n");
+    body.append("Location    : ").append(safe(location)).append("\n");
+    body.append("Updated By  : ").append(safe(updatedBy)).append("\n");
+    body.append("\nDescription:\n").append(safe(description)).append("\n");
+
+    body.append("\n========================================\n");
+    body.append("VIEW & UPDATE THIS ISSUE\n");
+    body.append("========================================\n");
+    body.append("Click the link below to view full details and update the status:\n");
+    body.append(viewLink).append("\n\n");
+    body.append("========================================\n");
+    body.append("This is an automated message from the Campus Issue Reporter.\n");
+
+    return body.toString();
+  }
+
+  private String buildNewDepartmentEmailBody(
+      String issueId,
+      String title,
+      String category,
+      String description,
+      String location,
+      String updatedBy,
+      String reporterName,
+      String updateToken,
+      List<String> imageUrls,
+      List<?> supportingDocs) {
+
+    StringBuilder body = new StringBuilder();
+    body.append("A campus issue has been transferred to your department for handling.\n\n");
+    body.append("========================================\n");
+    body.append("ISSUE DETAILS\n");
+    body.append("========================================\n");
+    body.append("Report ID    : ").append(issueId).append("\n");
+    body.append("Category     : ").append(safe(category)).append("\n");
+    body.append("Reported By  : ").append(safe(reporterName)).append("\n");
+    body.append("Title        : ").append(safe(title)).append("\n");
+    body.append("Location     : ").append(safe(location)).append("\n");
+    body.append("Transferred By: ").append(safe(updatedBy)).append("\n");
+    body.append("\nDescription:\n").append(safe(description)).append("\n");
+
+    String frontendBaseUrl = frontendUrl != null ? frontendUrl : "http://localhost:5173";
+    body.append("\n========================================\n");
+    body.append("QUICK ACTIONS\n");
+    body.append("========================================\n");
+    body.append("\nView Full Report & Update Status:\n");
+    body.append(frontendBaseUrl).append("/public/issue/").append(issueId)
+        .append("?token=").append(updateToken).append("\n\n");
+    body.append("========================================\n");
+    body.append("Please review this issue and update its status using the link above.\n");
+    body.append("This is an automated message from the Campus Issue Reporter.\n");
+    body.append("========================================\n");
+
+    return body.toString();
+  }
+
+  private String buildOldDepartmentTransferEmailBody(
+      String issueId,
+      String title,
+      String description,
+      String location,
+      String updatedBy,
+      String oldCategory,
+      String newCategory,
+      String reporterName) {
+
+    StringBuilder body = new StringBuilder();
+    body.append("An issue previously assigned to your department has been transferred.\n\n");
+    body.append("========================================\n");
+    body.append("TRANSFER NOTIFICATION\n");
+    body.append("========================================\n");
+    body.append("Report ID    : ").append(issueId).append("\n");
+    body.append("Reported By  : ").append(safe(reporterName)).append("\n");
+    body.append("Title        : ").append(safe(title)).append("\n");
+    body.append("Location     : ").append(safe(location)).append("\n");
+    body.append("Old Category : ").append(safe(oldCategory)).append("\n");
+    body.append("New Category : ").append(safe(newCategory)).append("\n");
+    body.append("Transferred By: ").append(safe(updatedBy)).append("\n");
+    body.append("\nBrief Description:\n")
+        .append(safe(description.length() > 200 ? description.substring(0, 200) + "..." : description)).append("\n");
+    body.append("\n========================================\n");
+    body.append("This issue is no longer under your department's responsibility.\n");
+    body.append("No further action is required from your department.\n");
+    body.append("========================================\n");
+    body.append("Regards,\n");
+    body.append("Campus Issue Reporter\n");
+
+    return body.toString();
+  }
+
+  private String getDepartmentEmail(String category) {
+    if (category == null)
+      return null;
+
+    Map<String, String> departmentEmails = new HashMap<>();
+    departmentEmails.put("FACILITIES", "kkdsashani@gmail.com");
+    departmentEmails.put("IT_SERVICES", "kkdsashani@gmail.com");
+    departmentEmails.put("SECURITY", "kkdsashani@gmail.com");
+    departmentEmails.put("ACADEMIC", "kkdsashani@gmail.com");
+    departmentEmails.put("OTHER", "kkdsashani@gmail.com");
+
+    return departmentEmails.get(category);
   }
 }

@@ -33,4 +33,11 @@ public class IssueUpdateRequest {
   private String adminNotes;
 
   private List<SupportingDocument> supportingDocs;
+
+  private String floor;
+  private String academicIssueCategory;
+  private String faculty;
+  private String moduleCode;
+
+  private String customTitle;
 }

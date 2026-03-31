@@ -205,9 +205,6 @@ const IssueCard = ({ issue, onClick }) => (
           {formatDate(issue.createdAt)}
         </div>
       </div>
-      <div className="flex items-center justify-between text-xs font-bold">
-        <span className="text-slate-400">Assigned: {issue.assignedToName || 'Unassigned'}</span>
-      </div>
     </div>
   </div>
 );
@@ -344,6 +341,166 @@ const IssuesPage = () => {
     return { validFiles, errors };
   };
 
+  const validateEditImageFiles = (files) => {
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const maxSize = 5 * 1024 * 1024;
+    const errors = [];
+    const validFiles = [];
+
+    for (let file of files) {
+      if (!validTypes.includes(file.type)) {
+        errors.push(`${file.name}: Only JPEG and PNG formats are allowed`);
+      } else if (file.size > maxSize) {
+        errors.push(`${file.name}: File size must be less than 5MB`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    return { validFiles, errors };
+  };
+
+  const handleEditImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const { validFiles, errors } = validateEditImageFiles(files);
+
+    if (errors.length > 0) {
+      setEditFileErrors({ ...editFileErrors, images: errors });
+      setTimeout(() => setEditFileErrors({ ...editFileErrors, images: [] }), 5000);
+    }
+
+    if (validFiles.length > 0) {
+      const newImageFiles = validFiles.map(file => ({ file, isExisting: false }));
+      setEditImageFiles(prev => [...prev, ...newImageFiles]);
+
+      // Generate previews
+      validFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEditImagePreviews(prev => [...prev, reader.result]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    e.target.value = '';
+  };
+
+  const removeEditImage = (indexToRemove) => {
+    setEditImageFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+    setEditImagePreviews(prev => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  const validateEditSupportingFiles = (files) => {
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    const maxSize = 10 * 1024 * 1024;
+    const errors = [];
+    const validFiles = [];
+
+    for (let file of files) {
+      if (!validTypes.includes(file.type)) {
+        errors.push(`${file.name}: Only JPEG, PNG, and PDF formats are allowed`);
+      } else if (file.size > maxSize) {
+        errors.push(`${file.name}: File size must be less than 10MB`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    return { validFiles, errors };
+  };
+
+  const handleEditSupportingUpload = (e) => {
+    const files = Array.from(e.target.files);
+    const { validFiles, errors } = validateEditSupportingFiles(files);
+
+    if (errors.length > 0) {
+      setEditFileErrors({ ...editFileErrors, supportingDocs: errors });
+      setTimeout(() => setEditFileErrors({ ...editFileErrors, supportingDocs: [] }), 5000);
+    }
+
+    if (validFiles.length > 0) {
+      const newDocFiles = validFiles.map(file => ({ file, isExisting: false }));
+      setEditSupportingFiles(prev => [...prev, ...newDocFiles]);
+    }
+    e.target.value = '';
+  };
+
+  const removeEditSupportingDoc = (indexToRemove) => {
+    setEditSupportingFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  // Edit form location helper functions
+  const getEditBuildingOptions = () => {
+    if (editData?.category === 'IT_SERVICES') {
+      return BUILDING_OPTIONS_IT;
+    }
+    return BUILDING_OPTIONS_ALL;
+  };
+
+  const isEditBuildingWithFloors = (building) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    return buildingData && buildingData.floors;
+  };
+
+  const isEditBuildingWithLocations = (building) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    return buildingData && buildingData.locations;
+  };
+
+  const isEditBuildingWithTextInput = (building) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    return buildingData && buildingData.type === 'text';
+  };
+
+  const getEditFloorsForBuilding = (building) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    return buildingData && buildingData.floors ? buildingData.floors : [];
+  };
+
+  const getEditRoomsForFloor = (building, floor) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    if (buildingData && buildingData.rooms && floor) {
+      return buildingData.rooms[floor] || [];
+    }
+    return [];
+  };
+
+  const hasEditRoomsForFloor = (building, floor) => {
+    const rooms = getEditRoomsForFloor(building, floor);
+    return rooms && rooms.length > 0;
+  };
+
+  const getEditLocationsForBuilding = (building) => {
+    const buildingData = LOCATION_OPTIONS_BY_BUILDING[building];
+    return buildingData && buildingData.locations ? buildingData.locations : [];
+  };
+
+  // Handle category change in edit form - reset all fields
+  const handleEditCategoryChange = (newCategory) => {
+    setEditData({
+      title: '',
+      category: newCategory,
+      description: editData?.description || '',
+      building: '',
+    });
+
+    // Reset all location and academic fields
+    setEditFloor('');
+    setEditLocationText('');
+    setEditAcademicIssueCategory('');
+    setEditIsOtherTitle(false);
+    setEditCustomTitle('');
+    setEditFaculty('');
+    setEditModuleCode('');
+
+    // Reset images and documents when category changes
+    setEditImageFiles([]);
+    setEditImagePreviews([]);
+    setEditSupportingFiles([]);
+    setEditFileErrors({});
+    setErrors({});
+  };
+
   // Generate preview URLs for images
   const generatePreviews = (files) => {
     const previews = [];
@@ -361,6 +518,17 @@ const IssuesPage = () => {
 
   const [editData, setEditData] = useState(null);
   const [errors, setErrors] = useState({});
+  const [editImageFiles, setEditImageFiles] = useState([]);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const [editSupportingFiles, setEditSupportingFiles] = useState([]);
+  const [editFileErrors, setEditFileErrors] = useState({});
+  const [editFloor, setEditFloor] = useState('');
+  const [editLocationText, setEditLocationText] = useState('');
+  const [editAcademicIssueCategory, setEditAcademicIssueCategory] = useState('');
+  const [editFaculty, setEditFaculty] = useState('');
+  const [editModuleCode, setEditModuleCode] = useState('');
+  const [editIsOtherTitle, setEditIsOtherTitle] = useState(false);
+  const [editCustomTitle, setEditCustomTitle] = useState('');
   const [commentText, setCommentText] = useState('');
   const [commentType, setCommentType] = useState('COMMENT');
   const [comments, setComments] = useState([]);
@@ -646,7 +814,7 @@ const IssuesPage = () => {
   const handleAssign = async (userId) => {
     if (!selectedIssue) return;
     try {
-      await issueApi.assign(selectedIssue.id, { assignedToUserId: userId });
+      // await issueApi.assign(selectedIssue.id, { assignedToUserId: userId });
       await loadIssueDetails(selectedIssue.id);
     } catch (err) {
       console.error('Assign failed:', err);
@@ -664,37 +832,197 @@ const IssuesPage = () => {
   };
 
   const handleStartEdit = () => {
+    const category = selectedIssue.category || 'FACILITIES';
+
+    // Set main form data
     setEditData({
       title: selectedIssue.title || '',
-      category: selectedIssue.category || 'FACILITIES',
+      category: category,
       description: selectedIssue.description || '',
       building: selectedIssue.building || '',
-      locationText: selectedIssue.locationText || '',
-      imageUrl: selectedIssue.imageUrls && selectedIssue.imageUrls.length > 0 ? selectedIssue.imageUrls[0] : '',
     });
+
+    // Set location fields based on category
+    if (category === 'FACILITIES' || category === 'IT_SERVICES') {
+      setEditFloor(selectedIssue.floor || '');
+      setEditLocationText(selectedIssue.locationText || '');
+    } else {
+      setEditFloor('');
+      setEditLocationText('');
+    }
+
+    // Set academic fields if category is ACADEMIC
+    if (category === 'ACADEMIC') {
+      // For academic, the title might be from academicIssueCategory
+      let academicCat = '';
+      let customTitle = '';
+
+      // Check if title matches any predefined category
+      const matchedCategory = ACADEMIC_ISSUE_CATEGORIES.find(cat =>
+        selectedIssue.title === cat
+      );
+
+      if (matchedCategory) {
+        academicCat = matchedCategory;
+        customTitle = '';
+      } else {
+        academicCat = 'Other';
+        customTitle = selectedIssue.title || '';
+      }
+
+      setEditAcademicIssueCategory(academicCat);
+      setEditIsOtherTitle(academicCat === 'Other');
+      setEditCustomTitle(customTitle);
+      setEditFaculty(selectedIssue.faculty || '');
+      setEditModuleCode(selectedIssue.moduleCode || '');
+    } else {
+      setEditAcademicIssueCategory('');
+      setEditIsOtherTitle(false);
+      setEditCustomTitle('');
+      setEditFaculty('');
+      setEditModuleCode('');
+    }
+
+    // Load existing images as previews
+    if (selectedIssue.imageUrls && selectedIssue.imageUrls.length > 0) {
+      setEditImagePreviews(selectedIssue.imageUrls);
+      const existingImageFiles = selectedIssue.imageUrls.map((url, index) => ({
+        name: `existing-image-${index}.jpg`,
+        preview: url,
+        isExisting: true,
+        dataUrl: url
+      }));
+      setEditImageFiles(existingImageFiles);
+    } else {
+      setEditImagePreviews([]);
+      setEditImageFiles([]);
+    }
+
+    // Load existing supporting documents
+    if (selectedIssue.supportingDocs && selectedIssue.supportingDocs.length > 0) {
+      const existingDocs = selectedIssue.supportingDocs.map((doc, index) => ({
+        name: doc.name || `document-${index}`,
+        type: doc.type,
+        data: doc.data,
+        size: doc.size,
+        isExisting: true
+      }));
+      setEditSupportingFiles(existingDocs);
+    } else {
+      setEditSupportingFiles([]);
+    }
+
     setErrors({});
+    setEditFileErrors({});
   };
 
   const handleSaveEdit = async () => {
     if (!editData) return;
 
-    // Create a clean update payload - only send fields that exist
+    // Validate before submission
+    // Validate before submission - include floor and locationText
+    const validationPayload = {
+      ...editData,
+      category: editData.category,
+      floor: editFloor,
+      locationText: editLocationText
+    };
+
+    const validationErrors = validateForm(validationPayload);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    // Create a clean update payload
     const updatePayload = {};
 
     if (editData.title) updatePayload.title = editData.title;
     if (editData.category) updatePayload.category = editData.category;
     if (editData.description) updatePayload.description = editData.description;
     if (editData.building !== undefined) updatePayload.building = editData.building;
-    if (editData.locationText !== undefined) updatePayload.locationText = editData.locationText;
-    if (editData.imageUrl !== undefined) updatePayload.imageUrl = [editData.imageUrl];
+
+    // Handle location based on category
+    if (editData.category === 'FACILITIES' || editData.category === 'IT_SERVICES') {
+      if (editLocationText) updatePayload.locationText = editLocationText;
+      if (editFloor) updatePayload.floor = editFloor;
+      if (editData.building) updatePayload.building = editData.building;
+    } else if (editData.category === 'ACADEMIC') {
+      // For academic, use custom title or selected category as title
+      let finalTitle = editAcademicIssueCategory;
+      if (editIsOtherTitle && editCustomTitle) {
+        finalTitle = editCustomTitle;
+      }
+      updatePayload.title = finalTitle;
+      updatePayload.academicIssueCategory = editAcademicIssueCategory;
+      updatePayload.faculty = editFaculty;
+      if (editModuleCode) updatePayload.moduleCode = editModuleCode;
+      updatePayload.locationText = `Academic issue: ${finalTitle}`;
+    } else {
+      // For SECURITY and OTHER
+      if (editLocationText) updatePayload.locationText = editLocationText;
+    }
+
+    // Handle images - convert new files to base64, keep existing as is
+    const imageUrls = [];
+    for (const img of editImageFiles) {
+      if (img.isExisting && img.dataUrl) {
+        // Keep existing image URL
+        imageUrls.push(img.dataUrl);
+      } else if (img.file) {
+        // Convert new file to base64
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(img.file);
+        });
+        imageUrls.push(base64);
+      }
+    }
+    if (imageUrls.length > 0) {
+      updatePayload.imageUrls = imageUrls;
+    }
+
+    // Handle supporting documents - keep existing, add new
+    const supportingDocs = [];
+    for (const doc of editSupportingFiles) {
+      if (doc.isExisting && doc.data) {
+        // Keep existing document
+        supportingDocs.push({
+          name: doc.name,
+          type: doc.type,
+          data: doc.data,
+          size: doc.size
+        });
+      } else if (doc.file) {
+        // Convert new file to base64
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(doc.file);
+        });
+        supportingDocs.push({
+          name: doc.file.name,
+          type: doc.file.type,
+          data: base64,
+          size: doc.file.size
+        });
+      }
+    }
+    if (supportingDocs.length > 0) {
+      updatePayload.supportingDocs = supportingDocs;
+    }
 
     try {
       setLoading(true);
       await issueApi.update(selectedIssue.id, updatePayload);
       setEditData(null);
+      setEditImageFiles([]);
+      setEditImagePreviews([]);
+      setEditSupportingFiles([]);
       setErrors({});
       await loadIssueDetails(selectedIssue.id);
-      // Also refresh the main list in background
       loadIssues();
     } catch (err) {
       console.error('Update failed:', err);
@@ -1390,9 +1718,7 @@ const IssuesPage = () => {
                 <span className={cn('px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border', statusBadgeStyles[selectedIssue.status] || statusBadgeStyles.OPEN)}>
                   {selectedIssue.status}
                 </span>
-                {selectedIssue.assignedToName && (
-                  <span className="px-5 py-2 bg-slate-100 text-slate-500 rounded-full text-xs font-black uppercase tracking-widest">Assigned: {selectedIssue.assignedToName}</span>
-                )}
+
               </div>
 
               <h2 className="text-4xl font-black text-slate-900 leading-tight">{selectedIssue.title}</h2>
@@ -1503,60 +1829,433 @@ const IssuesPage = () => {
               )}
 
               {editData && (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 border border-slate-100 rounded-3xl p-6">
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Title</label>
-                    <input
-                      value={editData.title}
-                      onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.title && 'border-red-500')}
-                    />
-                    {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
+                <div className="mt-6 space-y-6 bg-slate-50 border border-slate-100 rounded-3xl p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Category Selection */}
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Category</label>
+                      <select
+                        value={editData.category}
+                        onChange={(e) => handleEditCategoryChange(e.target.value)}
+                        className="w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none"
+                      >
+                        {CATEGORY_OPTIONS.map((category) => (
+                          <option key={category} value={category}>{category.replace('_', ' ')}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Academic Category Specific Fields */}
+                    {editData.category === 'ACADEMIC' && (
+                      <>
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Issue Category</label>
+                          <select
+                            value={editAcademicIssueCategory}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setEditAcademicIssueCategory(value);
+                              setEditIsOtherTitle(value === 'Other');
+                              if (value !== 'Other') {
+                                setEditCustomTitle('');
+                              }
+                              if (errors.academicIssueCategory) {
+                                setErrors({ ...errors, academicIssueCategory: undefined });
+                              }
+                            }}
+                            className={cn(
+                              'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                              errors.academicIssueCategory && 'border-red-500 bg-red-50'
+                            )}
+                          >
+                            <option value="">Select Issue Category</option>
+                            {ACADEMIC_ISSUE_CATEGORIES.map((category) => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                          {errors.academicIssueCategory && <p className="text-xs text-red-500 mt-1 ml-1">{errors.academicIssueCategory}</p>}
+                        </div>
+
+                        {/* Custom Title Input for "Other" */}
+                        {editIsOtherTitle && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Specify Issue Title</label>
+                            <input
+                              type="text"
+                              value={editCustomTitle}
+                              onChange={(e) => {
+                                setEditCustomTitle(e.target.value);
+                                if (errors.customTitle) {
+                                  setErrors({ ...errors, customTitle: undefined });
+                                }
+                              }}
+                              placeholder="Enter the issue title..."
+                              className={cn(
+                                'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                                errors.customTitle && 'border-red-500 bg-red-50'
+                              )}
+                            />
+                            {errors.customTitle && <p className="text-xs text-red-500 mt-1 ml-1">{errors.customTitle}</p>}
+                          </div>
+                        )}
+
+                        {/* Faculty Dropdown */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Faculty</label>
+                          <select
+                            value={editFaculty}
+                            onChange={(e) => {
+                              setEditFaculty(e.target.value);
+                              if (errors.faculty) {
+                                setErrors({ ...errors, faculty: undefined });
+                              }
+                            }}
+                            className={cn(
+                              'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                              errors.faculty && 'border-red-500 bg-red-50'
+                            )}
+                          >
+                            <option value="">Select Faculty</option>
+                            {FACULTY_OPTIONS.map((faculty) => (
+                              <option key={faculty} value={faculty}>{faculty}</option>
+                            ))}
+                          </select>
+                          {errors.faculty && <p className="text-xs text-red-500 mt-1 ml-1">{errors.faculty}</p>}
+                        </div>
+
+                        {/* Module Code Input */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Module Code (Optional)</label>
+                          <input
+                            type="text"
+                            value={editModuleCode}
+                            onChange={(e) => {
+                              setEditModuleCode(e.target.value);
+                              if (errors.moduleCode) {
+                                setErrors({ ...errors, moduleCode: undefined });
+                              }
+                            }}
+                            placeholder="Enter Module Code"
+                            className={cn(
+                              'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                              errors.moduleCode && 'border-red-500 bg-red-50'
+                            )}
+                          />
+                          {errors.moduleCode && <p className="text-xs text-red-500 mt-1 ml-1">{errors.moduleCode}</p>}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Title field for non-academic categories */}
+                    {editData.category !== 'ACADEMIC' && (
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Issue Title</label>
+                        <input
+                          type="text"
+                          value={editData.title}
+                          onChange={(e) => {
+                            setEditData({ ...editData, title: e.target.value });
+                            if (errors.title) {
+                              setErrors({ ...errors, title: undefined });
+                            }
+                          }}
+                          placeholder="Tell us your issue"
+                          className={cn(
+                            'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                            errors.title && 'border-red-500 bg-red-50'
+                          )}
+                        />
+                        {errors.title && <p className="text-xs text-red-500 mt-1 ml-1">{errors.title}</p>}
+                      </div>
+                    )}
+
+                    {/* Location fields for FACILITIES and IT_SERVICES only */}
+                    {(editData.category === 'FACILITIES' || editData.category === 'IT_SERVICES') && (
+                      <>
+                        {/* Building Selection */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Building</label>
+                          <select
+                            value={editData.building}
+                            onChange={(e) => {
+                              const nextBuilding = e.target.value;
+                              setEditData({ ...editData, building: nextBuilding });
+                              setEditFloor('');
+                              setEditLocationText('');
+                              setErrors({
+                                ...errors,
+                                building: undefined,
+                                floor: undefined,
+                                locationText: undefined
+                              });
+                            }}
+                            className={cn(
+                              'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                              errors.building && 'border-red-500 bg-red-50'
+                            )}
+                          >
+                            <option value="">Select building or location</option>
+                            {getEditBuildingOptions().map((building) => (
+                              <option key={building} value={building}>{building}</option>
+                            ))}
+                          </select>
+                          {errors.building && <p className="text-xs text-red-500 mt-1 ml-1">{errors.building}</p>}
+                        </div>
+
+                        {/* Floor Selection */}
+                        {editData.building && isEditBuildingWithFloors(editData.building) && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Floor</label>
+                            <select
+                              value={editFloor}
+                              onChange={(e) => {
+                                const floor = e.target.value;
+                                setEditFloor(floor);
+                                setEditLocationText('');
+                                setErrors((prevErrors) => ({
+                                  ...prevErrors,
+                                  floor: undefined,
+                                  locationText: undefined
+                                }));
+                              }}
+                              className={cn(
+                                'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                                errors.floor && 'border-red-500 bg-red-50'
+                              )}
+                            >
+                              <option value="">Select floor</option>
+                              {getEditFloorsForBuilding(editData.building).map((floor) => (
+                                <option key={floor} value={floor}>{floor}</option>
+                              ))}
+                            </select>
+                            {errors.floor && <p className="text-xs text-red-500 mt-1 ml-1">{errors.floor}</p>}
+                          </div>
+                        )}
+
+                        {/* Location Selection for floors with rooms */}
+                        {editData.building && isEditBuildingWithFloors(editData.building) && editFloor && hasEditRoomsForFloor(editData.building, editFloor) && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Location</label>
+                            <select
+                              value={editLocationText}
+                              onChange={(e) => {
+                                setEditLocationText(e.target.value);
+                                if (errors.locationText) {
+                                  setErrors((prevErrors) => ({ ...prevErrors, locationText: undefined }));
+                                }
+                              }}
+                              className={cn(
+                                'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                                errors.locationText && 'border-red-500 bg-red-50'
+                              )}
+                            >
+                              <option value="">Select location</option>
+                              {getEditRoomsForFloor(editData.building, editFloor).map((room) => (
+                                <option key={room} value={room}>{room}</option>
+                              ))}
+                            </select>
+                            {errors.locationText && <p className="text-xs text-red-500 mt-1 ml-1">{errors.locationText}</p>}
+                          </div>
+                        )}
+
+                        {/* Message for floors without rooms */}
+                        {editData.building && isEditBuildingWithFloors(editData.building) && editFloor && !hasEditRoomsForFloor(editData.building, editFloor) && (
+                          <div className="md:col-span-2">
+                            <div className="w-full px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                              <p className="text-amber-700 font-medium text-sm">
+                                📍 This floor has no specific locations. Please describe the exact location in the description field above.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Simple Location List for Sports Areas and Outdoor Locations */}
+                        {editData.building && isEditBuildingWithLocations(editData.building) && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Select Location</label>
+                            <select
+                              value={editLocationText}
+                              onChange={(e) => {
+                                setEditLocationText(e.target.value);
+                                if (errors.locationText) {
+                                  setErrors((prevErrors) => ({ ...prevErrors, locationText: undefined }));
+                                }
+                              }}
+                              className={cn(
+                                'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                                errors.locationText && 'border-red-500 bg-red-50'
+                              )}
+                            >
+                              <option value="">Select location</option>
+                              {getEditLocationsForBuilding(editData.building).map((location) => (
+                                <option key={location} value={location}>{location}</option>
+                              ))}
+                            </select>
+                            {errors.locationText && <p className="text-xs text-red-500 mt-1 ml-1">{errors.locationText}</p>}
+                          </div>
+                        )}
+
+                        {/* Text Input for Main Auditorium and Other */}
+                        {editData.building && isEditBuildingWithTextInput(editData.building) && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Specify Location</label>
+                            <input
+                              type="text"
+                              value={editLocationText}
+                              onChange={(e) => {
+                                setEditLocationText(e.target.value);
+                                if (errors.locationText) {
+                                  setErrors((prevErrors) => ({ ...prevErrors, locationText: undefined }));
+                                }
+                              }}
+                              placeholder="Enter Specific Location"
+                              className={cn(
+                                'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                                errors.locationText && 'border-red-500 bg-red-50'
+                              )}
+                            />
+                            {errors.locationText && <p className="text-xs text-red-500 mt-1 ml-1">{errors.locationText}</p>}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Description Field */}
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Description</label>
+                      <textarea
+                        value={editData.description}
+                        onChange={(e) => {
+                          setEditData({ ...editData, description: e.target.value });
+                          if (errors.description) {
+                            setErrors({ ...errors, description: undefined });
+                          }
+                        }}
+                        rows="4"
+                        placeholder="Tell us exactly what's wrong..."
+                        className={cn(
+                          'w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none',
+                          errors.description && 'border-red-500 bg-red-50'
+                        )}
+                      />
+                      {errors.description && <p className="text-xs text-red-500 mt-1 ml-1">{errors.description}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category</label>
-                    <select
-                      value={editData.category}
-                      onChange={(e) => setEditData({ ...editData, category: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      {CATEGORY_OPTIONS.map((category) => (
-                        <option key={category} value={category}>{category.replace('_', ' ')}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</label>
-                    <textarea
-                      rows="3"
-                      value={editData.description}
-                      onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.description && 'border-red-500')}
-                    />
-                    {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Building</label>
-                    <input
-                      value={editData.building}
-                      onChange={(e) => setEditData({ ...editData, building: e.target.value })}
-                      className={cn('w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20', errors.building && 'border-red-500')}
-                    />
-                    {errors.building && <p className="text-xs text-red-500 mt-1">{errors.building}</p>}
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Location</label>
-                    <input
-                      value={editData.locationText}
-                      onChange={(e) => setEditData({ ...editData, locationText: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex gap-3 pt-2">
+
+                  {/* Image Upload Section - for non-academic categories */}
+                  {editData.category !== 'ACADEMIC' && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Images (Optional - JPEG, PNG only, up to 5MB each)</label>
+                      <div className="relative mt-1">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png"
+                          multiple
+                          onChange={handleEditImageUpload}
+                          className="w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none"
+                        />
+                      </div>
+
+                      {/* Image Previews with Delete Buttons */}
+                      {editImagePreviews.length > 0 && (
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          {editImagePreviews.map((preview, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={preview}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(preview, '_blank')}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeEditImage(index)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {editFileErrors.images && (
+                        <div className="mt-2 text-xs text-red-500">
+                          {editFileErrors.images.map((err, i) => <p key={i}>{err}</p>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Supporting Documents Section - for Academic category only */}
+                  {editData.category === 'ACADEMIC' && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Supporting Documents (Optional - JPEG, PNG, PDF, up to 10MB each)</label>
+                      <div className="relative mt-1">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,application/pdf"
+                          multiple
+                          onChange={handleEditSupportingUpload}
+                          className="w-full px-6 py-4 bg-white border border-slate-100 rounded-2xl focus:border-primary transition-all font-bold outline-none pl-12"
+                        />
+                        <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      </div>
+
+                      {/* Documents List with Delete Buttons */}
+                      {editSupportingFiles.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {editSupportingFiles.map((doc, index) => (
+                            <div key={index} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
+                              <div className="flex items-center gap-3">
+                                {(doc.type === 'application/pdf' || doc.file?.type === 'application/pdf') ? (
+                                  <FileText size={20} className="text-red-500" />
+                                ) : (
+                                  <Image size={20} className="text-green-500" />
+                                )}
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900 truncate max-w-[200px]">
+                                    {doc.name || doc.file?.name || `Document ${index + 1}`}
+                                  </p>
+                                  <p className="text-xs text-slate-400">
+                                    {doc.type?.split('/')[1]?.toUpperCase() || doc.file?.type?.split('/')[1]?.toUpperCase() || 'File'}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeEditSupportingDoc(index)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {editFileErrors.supportingDocs && (
+                        <div className="mt-2 text-xs text-red-500">
+                          {editFileErrors.supportingDocs.map((err, i) => <p key={i}>{err}</p>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
                     <button
                       onClick={() => {
                         setEditData(null);
+                        setEditImageFiles([]);
+                        setEditImagePreviews([]);
+                        setEditSupportingFiles([]);
+                        setEditFloor('');
+                        setEditLocationText('');
+                        setEditAcademicIssueCategory('');
+                        setEditIsOtherTitle(false);
+                        setEditCustomTitle('');
+                        setEditFaculty('');
+                        setEditModuleCode('');
                         setErrors({});
+                        setEditFileErrors({});
                       }}
                       className="flex-1 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
                     >
@@ -1634,75 +2333,6 @@ const IssuesPage = () => {
             </div>
           </div>
           <div className="space-y-8">
-            <div className="bg-slate-900 rounded-[40px] p-12 text-white shadow-2xl">
-              <h3 className="text-2xl font-black mb-6">Admin Actions</h3>
-              <p className="text-slate-400 text-sm leading-relaxed mb-8">
-                {isAdmin ? 'Assign issues, update status, and add admin notes.' : 'Admins only.'}
-              </p>
-
-              {isAdmin ? (
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assign To User ID</label>
-                    <input
-                      value={assignUserId}
-                      onChange={(e) => setAssignUserId(e.target.value)}
-                      placeholder="User ID"
-                      className="w-full px-4 py-3 bg-white/10 text-white rounded-2xl border border-white/20"
-                    />
-                    <button
-                      onClick={() => handleAssign(assignUserId || user?.id)}
-                      className="w-full py-3 bg-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl"
-                    >
-                      Assign Issue
-                    </button>
-                    <button
-                      onClick={() => handleAssign(user?.id)}
-                      className="w-full py-3 bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/20"
-                    >
-                      Assign to Me
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Update Status</label>
-                    <select
-                      value={statusUpdate.status}
-                      onChange={(e) => setStatusUpdate({ ...statusUpdate, status: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/10 text-white rounded-2xl border border-white/20"
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status} className="text-slate-900">{status.replace('_', ' ')}</option>
-                      ))}
-                    </select>
-                    <textarea
-                      rows="2"
-                      value={statusUpdate.note}
-                      onChange={(e) => setStatusUpdate({ ...statusUpdate, note: e.target.value })}
-                      placeholder="Status change note"
-                      className="w-full px-4 py-3 bg-white/10 text-white rounded-2xl border border-white/20"
-                    ></textarea>
-                    <textarea
-                      rows="2"
-                      value={statusUpdate.adminNotes}
-                      onChange={(e) => setStatusUpdate({ ...statusUpdate, adminNotes: e.target.value })}
-                      placeholder="Admin notes"
-                      className="w-full px-4 py-3 bg-white/10 text-white rounded-2xl border border-white/20"
-                    ></textarea>
-                    <button
-                      onClick={handleStatusChange}
-                      className="w-full py-3 bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/20"
-                    >
-                      Update Status
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 text-slate-400 text-sm">
-                  <BadgeCheck size={18} /> Admin privileges required
-                </div>
-              )}
-            </div>
 
             <div className="bg-white rounded-[40px] border border-slate-100 p-10 flex flex-col items-center text-center">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 mb-6">
