@@ -1,5 +1,3 @@
-
-
 package com.example.academic_support_portal.issue.service;
 
 import com.example.academic_support_portal.issue.dto.IssueAssignRequest;
@@ -57,7 +55,7 @@ public class IssueService {
 
   public IssueResponse createIssue(IssueCreateRequest request) {
     User user = getCurrentUser();
-    ensureLocationProvided(request.getBuilding(), request.getLocationText());
+    ensureLocationProvided(request.getBuilding(), request.getLocationText(), request.getCategory());
 
     IssuePriority priority = Optional.ofNullable(request.getPriority()).orElse(IssuePriority.MEDIUM);
     LocalDateTime now = LocalDateTime.now();
@@ -99,7 +97,7 @@ public class IssueService {
         .status(null)
         .isUsed(false)
         .createdAt(now)
-        .expiresAt(null)
+        .expiresAt(now.plusDays(30))
         .build();
     updateTokenRepository.save(updateToken);
 
@@ -261,7 +259,7 @@ public class IssueService {
       hasChanges = true;
     }
 
-    ensureLocationProvided(issue.getBuilding(), issue.getLocationText());
+    ensureLocationProvided(issue.getBuilding(), issue.getLocationText(), issue.getCategory());
     issue.setUpdatedAt(LocalDateTime.now());
 
     CampusIssue saved = issueRepository.save(issue);
@@ -283,39 +281,57 @@ public class IssueService {
 
       // Send email notifications
       try {
-        // Get student email (reporter)
         String studentEmail = saved.getStudentEmail();
         String studentName = saved.getCreatedByName();
 
-        // Get location for email
         String location = saved.getBuilding() != null ? saved.getBuilding() : saved.getLocationText();
-        if (location == null)
-          location = "Not specified";
+        if (location == null) location = "Not specified";
 
-        // Prepare image URLs and supporting docs
         List<String> imageUrls = saved.getImageUrls() != null ? saved.getImageUrls() : new ArrayList<>();
-        List<SupportingDocument> supportingDocs = saved.getSupportingDocs() != null ? saved.getSupportingDocs()
-            : new ArrayList<>();
+        List<SupportingDocument> supportingDocs = saved.getSupportingDocs() != null ? saved.getSupportingDocs() : new ArrayList<>();
 
-        // Send update email - pass the existing token
-        // Get existing token from database
-        String existingToken = updateTokenRepository.findByIssueId(saved.getId())
-            .map(UpdateToken::getToken)
-            .orElse(null);
+        boolean categoryChanged = oldCategory != null && !oldCategory.equals(saved.getCategory());
+        
+        String tokenToUse = null;
+        
+        if (categoryChanged) {
+    // Category changed - create and save a NEW token for the new department
+    String newToken = UUID.randomUUID().toString();
+    LocalDateTime now = LocalDateTime.now();
+    UpdateToken newUpdateToken = UpdateToken.builder()
+        .token(newToken)
+        .issueId(saved.getId())
+        .status(null)
+        .isUsed(false)
+        .createdAt(now)
+        .expiresAt(now.plusDays(30))
+        .build();
+    updateTokenRepository.save(newUpdateToken);
+    tokenToUse = newToken;
+    log.info("Created NEW token for category change: {} -> {}, token={}", oldCategory, saved.getCategory(), newToken);
+} else {
+    tokenToUse = updateTokenRepository.findByIssueId(saved.getId())
+        .map(UpdateToken::getToken)
+        .orElse(null);
+    log.info("Using existing token for update: {}", tokenToUse);
+}
 
-        emailService.sendIssueUpdateEmail(
-            oldCategory,
-            saved.getCategory(),
-            saved.getId(),
-            saved.getTitle(),
-            saved.getDescription(),
-            location,
-            user.getName(),
-            studentEmail,
-            studentName,
-            imageUrls,
-            supportingDocs,
-            existingToken);
+// Then pass tokenToUse to email service
+emailService.sendIssueUpdateEmail(
+    oldCategory,
+    saved.getCategory(),
+    saved.getId(),
+    saved.getTitle(),
+    saved.getDescription(),
+    location,
+    user.getName(),
+    studentEmail,
+    studentName,
+    imageUrls,
+    supportingDocs,
+    tokenToUse  // This is the token that should be used in the email
+);
+            
       } catch (Exception e) {
         log.error("Failed to send issue update email for issueId={}: {}", saved.getId(), e.getMessage());
       }
@@ -547,10 +563,15 @@ public class IssueService {
     return toCommentResponse(comment);
   }
 
-  private void ensureLocationProvided(String building, String locationText) {
-    if (!StringUtils.hasText(building) && !StringUtils.hasText(locationText)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Building or location text is required");
+  private void ensureLocationProvided(String building, String locationText, String category) {
+    // Only validate for categories that require location
+    if (category != null && (category.equals("FACILITIES") || category.equals("IT_SERVICES"))) {
+      if (!StringUtils.hasText(building) && !StringUtils.hasText(locationText)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Building or location text is required for " + category + " issues");
+      }
     }
+    // For SECURITY, OTHER, ACADEMIC - location is optional or auto-generated
   }
 
   private User getCurrentUser() {

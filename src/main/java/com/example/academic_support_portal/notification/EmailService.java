@@ -1,6 +1,5 @@
 package com.example.academic_support_portal.notification;
 
-import com.example.academic_support_portal.issue.model.UpdateToken;
 import com.example.academic_support_portal.tutor.model.TutoringSession;
 import com.example.academic_support_portal.tutor_request.model.TutorRequest;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +9,6 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -408,26 +406,18 @@ public class EmailService {
 
     // 2. Handle based on whether category changed or not
     if (categoryChanged) {
-      // Category CHANGED - New department gets NEW ISSUE EMAIL (EXACTLY same as new
-      // report)
+      // Category CHANGED - New department gets NEW ISSUE EMAIL
       String newDepartmentEmail = getDepartmentEmail(newCategory);
       if (newDepartmentEmail != null && !newDepartmentEmail.isBlank()) {
-        // Generate NEW token for the new department
-        String newToken = UUID.randomUUID().toString();
-
-        // Use the SAME email template as new issue report
+        // USE THE TOKEN THAT WAS PASSED IN (already saved in IssueService)
+        String tokenForLink = existingToken;
+        
         String newDeptSubject = String.format("[%s] New Issue Report: %s", newCategory, title);
-        String newDeptBody = buildNewIssueEmailBody(
+        String newDeptBody = buildNewDepartmentEmailBody(
             issueId, title, newCategory, description, location,
-            "MEDIUM", // Default priority
-            LocalDateTime.now().toString(),
-            studentName,
-            newToken,
-            imageUrls,
-            supportingDocs);
+            updatedBy, studentName, tokenForLink, imageUrls, supportingDocs);
         sendPlainText(newDepartmentEmail, newDeptSubject, newDeptBody);
-        log.info("NEW ISSUE EMAIL (same as new report) sent to new department: {} for issueId={}", newDepartmentEmail,
-            issueId);
+        log.info("NEW ISSUE EMAIL sent to new department: {} with token: {} for issueId={}", newDepartmentEmail, tokenForLink, issueId);
       }
 
       // Category CHANGED - Old department gets TRANSFER NOTIFICATION
@@ -445,7 +435,6 @@ public class EmailService {
       // Category SAME - Send UPDATE email to current department with token link
       String currentDepartmentEmail = getDepartmentEmail(newCategory);
       if (currentDepartmentEmail != null && !currentDepartmentEmail.isBlank()) {
-        // Use the public view with token so they can update status
         String departmentViewLink = frontendBaseUrl + "/public/issue/" + issueId + "?token=" + existingToken;
 
         String currentDeptSubject = String.format("[UPDATE] Issue #%s: %s", issueId, title);
@@ -586,11 +575,6 @@ public class EmailService {
     return body.toString();
   }
 
-  /**
-   * Build email body for department update notification (when category doesn't
-   * change)
-   * Uses public view link with token so department can update status
-   */
   private String buildDepartmentUpdateEmailBody(
       String issueId,
       String title,
@@ -636,7 +620,7 @@ public class EmailService {
       String updateToken,
       List<String> imageUrls,
       List<?> supportingDocs) {
-
+    
     StringBuilder body = new StringBuilder();
     body.append("A campus issue has been transferred to your department for handling.\n\n");
     body.append("========================================\n");
@@ -649,7 +633,7 @@ public class EmailService {
     body.append("Location     : ").append(safe(location)).append("\n");
     body.append("Transferred By: ").append(safe(updatedBy)).append("\n");
     body.append("\nDescription:\n").append(safe(description)).append("\n");
-
+    
     String frontendBaseUrl = frontendUrl != null ? frontendUrl : "http://localhost:5173";
     body.append("\n========================================\n");
     body.append("QUICK ACTIONS\n");
@@ -661,7 +645,7 @@ public class EmailService {
     body.append("Please review this issue and update its status using the link above.\n");
     body.append("This is an automated message from the Campus Issue Reporter.\n");
     body.append("========================================\n");
-
+    
     return body.toString();
   }
 
