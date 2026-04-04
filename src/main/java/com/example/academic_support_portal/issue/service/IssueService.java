@@ -103,7 +103,7 @@ public class IssueService {
 
     String departmentEmail = getDepartmentEmail(saved.getCategory());
 
-    try {
+        try {
       emailService.sendNewIssueEmail(
           departmentEmail,
           saved.getId(),
@@ -114,6 +114,7 @@ public class IssueService {
           saved.getPriority() != null ? saved.getPriority().toString() : "MEDIUM",
           now.toString(),
           user.getName(),
+          user.getEmail(),  // ← ADD THIS LINE - student's email for Reply-To
           token,
           saved.getImageUrls(),
           saved.getSupportingDocs());
@@ -462,6 +463,25 @@ emailService.sendIssueUpdateEmail(
 
     issue.setUpdatedAt(LocalDateTime.now());
     issueRepository.save(issue);
+
+        // Send email notification to department when student adds a comment
+    try {
+      String departmentEmail = getDepartmentEmail(issue.getCategory());
+      if (departmentEmail != null && StringUtils.hasText(departmentEmail)) {
+        String studentEmail = user.getEmail();
+        String studentName = user.getName();
+        
+        emailService.sendIssueCommentEmail(
+            departmentEmail,
+            issue.getId(),
+            issue.getTitle(),
+            request.getMessage(),
+            studentName,
+            studentEmail);
+      }
+    } catch (Exception e) {
+      log.error("Failed to send comment notification email: {}", e.getMessage());
+    }
 
     return toCommentResponse(comment);
   }
