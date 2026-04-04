@@ -28,12 +28,14 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+// Handles study-circle lifecycle: discovery, membership, owner permissions, and response mapping.
 public class StudyCircleService {
 
   private final StudyCircleRepository circleRepository;
   private final StudyCircleMemberRepository memberRepository;
   private final UserRepository userRepository;
 
+  // Fetches all active circles and marks which circles the current user already joined.
   public List<StudyCircleResponse> getAllActiveCircles() {
     User currentUser = getCurrentUser();
     List<StudyCircle> circles = circleRepository.findByIsActiveTrueOrderByCreatedAtDesc();
@@ -43,6 +45,7 @@ public class StudyCircleService {
         .toList();
   }
 
+  // Returns full details for one circle, including current member roster.
   public StudyCircleDetailsResponse getCircleDetails(String id) {
     User currentUser = getCurrentUser();
     StudyCircle circle = getExistingCircle(id);
@@ -51,6 +54,7 @@ public class StudyCircleService {
     return toDetailsResponse(circle, members, currentUser.getId());
   }
 
+  // Creates circle metadata and auto-adds creator as OWNER member.
   public StudyCircleDetailsResponse createCircle(CreateStudyCircleRequest request) {
     User currentUser = getCurrentUser();
     Integer normalizedMaxMembers = normalizeMaxMembers(request.getMaxMembers());
@@ -87,6 +91,7 @@ public class StudyCircleService {
     return toDetailsResponse(savedCircle, members, currentUser.getId());
   }
 
+  // Adds current user as MEMBER after active/duplicate/capacity checks.
   public StudyCircleDetailsResponse joinCircle(String id) {
     User currentUser = getCurrentUser();
     StudyCircle circle = getExistingCircle(id);
@@ -119,6 +124,7 @@ public class StudyCircleService {
     return toDetailsResponse(updated, members, currentUser.getId());
   }
 
+  // Removes current user; if owner leaves, ownership is reassigned to earliest remaining member.
   public StudyCircleDetailsResponse leaveCircle(String id) {
     User currentUser = getCurrentUser();
     StudyCircle circle = getExistingCircle(id);
@@ -153,6 +159,7 @@ public class StudyCircleService {
     return toDetailsResponse(updated, remaining, currentUser.getId());
   }
 
+  // Returns circles where current user is a member, including their role in each circle.
   public List<MyStudyCircleResponse> getMyCircles() {
     User currentUser = getCurrentUser();
     List<StudyCircleMember> memberships = memberRepository.findByUserIdOrderByJoinedAtDesc(currentUser.getId());
@@ -182,6 +189,7 @@ public class StudyCircleService {
         .toList();
   }
 
+  // Owner-only update path for circle metadata and membership limit changes.
   public StudyCircleDetailsResponse updateCircle(String id, UpdateStudyCircleRequest request) {
     User currentUser = getCurrentUser();
     StudyCircle circle = getExistingCircle(id);
@@ -207,6 +215,7 @@ public class StudyCircleService {
     return toDetailsResponse(updated, members, currentUser.getId());
   }
 
+  // Owner-only soft delete by marking circle inactive.
   public void deactivateCircle(String id) {
     User currentUser = getCurrentUser();
     StudyCircle circle = getExistingCircle(id);
@@ -218,11 +227,13 @@ public class StudyCircleService {
     circleRepository.save(circle);
   }
 
+  // Shared helper for loading circle by id with consistent 404 behavior.
   private StudyCircle getExistingCircle(String id) {
     return circleRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Circle not found"));
   }
 
+  // Resolves authenticated principal to a persisted user record.
   private User getCurrentUser() {
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication == null || !authentication.isAuthenticated()) {
@@ -233,12 +244,14 @@ public class StudyCircleService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
   }
 
+  // Authorization guard for owner-only actions.
   private void ensureOwner(StudyCircle circle, User user) {
     if (!user.getId().equals(circle.getCreatedByUserId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the circle owner can perform this action");
     }
   }
 
+  // Validation helper for optional member limit.
   private Integer normalizeMaxMembers(Integer maxMembers) {
     if (maxMembers == null) {
       return null;
@@ -249,6 +262,7 @@ public class StudyCircleService {
     return maxMembers;
   }
 
+  // Maps entity to list-card payload with computed joined/memberCount values.
   private StudyCircleResponse toListResponse(StudyCircle circle, String userId) {
     int memberCount = (int) memberRepository.countByCircleId(circle.getId());
     boolean joined = memberRepository.existsByCircleIdAndUserId(circle.getId(), userId);
@@ -267,6 +281,7 @@ public class StudyCircleService {
         .build();
   }
 
+  // Maps entity + members into detailed response used by circle detail screens.
   private StudyCircleDetailsResponse toDetailsResponse(
       StudyCircle circle,
       List<StudyCircleMember> members,
@@ -297,6 +312,7 @@ public class StudyCircleService {
         .build();
   }
 
+  // Maps member entity to API response DTO.
   private StudyCircleMemberResponse toMemberResponse(StudyCircleMember member) {
     return StudyCircleMemberResponse.builder()
         .id(member.getId())
@@ -309,6 +325,7 @@ public class StudyCircleService {
         .build();
   }
 
+  // Lightweight trimming helpers to normalize user-entered text.
   private String trim(String value) {
     if (value == null) {
       return null;

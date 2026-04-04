@@ -4,6 +4,7 @@ import { tutorApi, tutorRequestApi } from "../../api/supportApi";
 import { useAuth } from "../../context/AuthContext";
 import { SUBJECTS } from "../../utils/constants";
 
+// Student-facing page for creating a tutoring request and sending it to a selected tutor.
 export default function TutorRequest() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -32,6 +33,7 @@ export default function TutorRequest() {
 
     const todayStr = new Date().toISOString().split("T")[0];
 
+    // Keep read-only student identity fields in sync with the authenticated user.
     useEffect(() => {
         setForm((prev) => ({
             ...prev,
@@ -40,6 +42,7 @@ export default function TutorRequest() {
         }));
     }, [user]);
 
+    // Load available tutors so students can route the request to a specific tutor.
     useEffect(() => {
         const load = async () => {
             try {
@@ -52,6 +55,7 @@ export default function TutorRequest() {
         load();
     }, []);
 
+    // Filter tutor options by selected subject for a more relevant tutor list.
     const tutorsForSubject = useMemo(() => {
         if (!form.subject.trim()) return tutors;
         return tutors.filter(
@@ -65,6 +69,7 @@ export default function TutorRequest() {
         setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
     };
 
+    // Validate required scheduling and message fields before API submission.
     const validate = () => {
         const e = {};
         if (!form.studentName.trim()) e.studentName = "Student name is required";
@@ -82,6 +87,7 @@ export default function TutorRequest() {
         return Object.keys(e).length === 0;
     };
 
+    // Submit tutor request to backend and show confirmation modal on success.
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!user) return;
@@ -106,6 +112,7 @@ export default function TutorRequest() {
         }
     };
 
+    // Close success modal and move student to request tracking page.
     const closeSuccess = () => {
         setShowSuccess(false);
         navigate("/support/requests");

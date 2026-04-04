@@ -146,6 +146,7 @@ const formatDate = (value) => {
   return date.toLocaleString();
 };
 
+// Issue card component
 const IssueCard = ({ issue, onClick }) => (
   <div
     onClick={onClick}
@@ -209,6 +210,7 @@ const IssueCard = ({ issue, onClick }) => (
   </div>
 );
 
+// issue page
 const IssuesPage = () => {
   const { user } = useAuth();
   const isAdmin = useMemo(() => {
@@ -676,6 +678,7 @@ const IssuesPage = () => {
     return nextErrors;
   };
 
+  // create/report issue function
   const handleReportIssue = async () => {
     setErrors({});
 
@@ -1099,6 +1102,7 @@ const IssuesPage = () => {
             Report New Issue <AlertCircle size={18} />
           </button>
         )}
+
         {(view === 'report' || view === 'detail') && (
           <button
             onClick={() => {
@@ -1464,7 +1468,7 @@ const IssuesPage = () => {
                   <div className="field">
                     <div className="w-full px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl">
                       <p className="text-amber-700 font-medium text-sm">
-                        📍 This floor has no specific locations. Please describe the exact location in the description field above.
+                        📍 This floor has no specific locations. Please describe the exact location in the description field below.
                       </p>
                     </div>
                   </div>
@@ -2063,7 +2067,7 @@ const IssuesPage = () => {
                           <div className="md:col-span-2">
                             <div className="w-full px-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl">
                               <p className="text-amber-700 font-medium text-sm">
-                                📍 This floor has no specific locations. Please describe the exact location in the description field above.
+                                📍 This floor has no specific locations. Please describe the exact location in the description field below.
                               </p>
                             </div>
                           </div>

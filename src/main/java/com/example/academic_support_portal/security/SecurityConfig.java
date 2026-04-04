@@ -48,11 +48,6 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.GET, "/api/dashboard/environment").permitAll()
             .requestMatchers("/api/resources/**").permitAll()
             .requestMatchers("/api/debug/**").permitAll()
-            // ✅ ADD THESE LINES - Public issue endpoints
-            .requestMatchers("/api/issues/update-status").permitAll()
-            .requestMatchers("/api/issues/add-note").permitAll()
-            .requestMatchers("/api/issues/*/comments").permitAll()
-            .requestMatchers("/api/public/**").permitAll()
             .anyRequest().authenticated())
         .sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -90,7 +85,7 @@ public class SecurityConfig {
     configuration.setAllowedHeaders(List.of("*"));
     configuration.setExposedHeaders(List.of("Authorization"));
     configuration.setAllowCredentials(true);
-    configuration.setMaxAge(3600L);
+    configuration.setMaxAge(3600L); // Cache preflight for 1 hour
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);
     return source;

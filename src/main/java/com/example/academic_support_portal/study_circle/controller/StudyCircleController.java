@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+// Controller for study-circle collaboration features used in student support.
 @RestController
 @RequestMapping("/api/study-circles")
 @RequiredArgsConstructor
@@ -29,37 +30,44 @@ public class StudyCircleController {
 
   private final StudyCircleService studyCircleService;
 
+  // Lists active circles for discovery page cards.
   @GetMapping
   public List<StudyCircleResponse> getAllCircles() {
     return studyCircleService.getAllActiveCircles();
   }
 
+  // Returns one circle with member details.
   @GetMapping("/{id}")
   public StudyCircleDetailsResponse getCircleDetails(@PathVariable String id) {
     return studyCircleService.getCircleDetails(id);
   }
 
+  // Creates a new study circle owned by the authenticated user.
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   public StudyCircleDetailsResponse createCircle(@Valid @RequestBody CreateStudyCircleRequest request) {
     return studyCircleService.createCircle(request);
   }
 
+  // Joins current user to circle when capacity and status checks pass.
   @PostMapping("/{id}/join")
   public StudyCircleDetailsResponse joinCircle(@PathVariable String id) {
     return studyCircleService.joinCircle(id);
   }
 
+  // Leaves circle; owner handoff is handled in service if needed.
   @DeleteMapping("/{id}/leave")
   public StudyCircleDetailsResponse leaveCircle(@PathVariable String id) {
     return studyCircleService.leaveCircle(id);
   }
 
+  // Lists circles where current user is already a member.
   @GetMapping("/my")
   public List<MyStudyCircleResponse> getMyCircles() {
     return studyCircleService.getMyCircles();
   }
 
+  // Updates editable circle metadata (owner only).
   @PutMapping("/{id}")
   public StudyCircleDetailsResponse updateCircle(
       @PathVariable String id,
@@ -67,6 +75,7 @@ public class StudyCircleController {
     return studyCircleService.updateCircle(id, request);
   }
 
+  // Soft-deactivates a circle from discovery lists.
   @DeleteMapping("/{id}")
   public ResponseEntity<Void> deactivateCircle(@PathVariable String id) {
     studyCircleService.deactivateCircle(id);

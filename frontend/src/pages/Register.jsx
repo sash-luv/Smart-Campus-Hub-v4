@@ -4,6 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, User, Phone, Loader2 } from 'lucide-react';
 import authBg from '../assets/images/auth-bg.svg';
 
+const STUDENT_EMAIL_REGEX = /^student\d+@gmail\.com$/;
+const STUDENT_NUMERIC_REGEX = /^\d+$/;
+const VALID_EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
 const Register = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -12,15 +16,30 @@ const Register = () => {
     phone: '',
     role: 'STUDENT'
   });
+  const [studentEmailNumber, setStudentEmailNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const buildStudentEmail = (numericPart) => `student${numericPart}@gmail.com`;
+
   const validateForm = () => {
     if (!formData.name.trim()) return 'Full name is required';
-    if (!formData.email.trim()) return 'Email is required';
-    if (!formData.email.includes('@')) return 'Invalid email format';
+    if (formData.role === 'STUDENT') {
+      if (!studentEmailNumber.trim() || !STUDENT_NUMERIC_REGEX.test(studentEmailNumber.trim())) {
+        return 'Email must be in format studentXXXXXX@gmail.com';
+      }
+      const studentEmail = buildStudentEmail(studentEmailNumber.trim());
+      if (!STUDENT_EMAIL_REGEX.test(studentEmail)) {
+        return 'Email must be in format studentXXXXXX@gmail.com';
+      }
+    } else if (!formData.email.trim()) {
+      return 'Email is required';
+    }
+    if (formData.role === 'TUTOR' && !VALID_EMAIL_REGEX.test(formData.email.trim())) {
+      return 'Invalid email address';
+    }
     if (!formData.phone.trim()) return 'Phone number is required';
     if (formData.password.length < 6) return 'Password must be at least 6 characters';
     return null;
@@ -37,8 +56,13 @@ const Register = () => {
     setLoading(true);
     setError('');
     try {
+      const normalizedEmail = formData.role === 'STUDENT'
+        ? buildStudentEmail(studentEmailNumber.trim())
+        : formData.email.trim();
+
       await register({
         ...formData,
+        email: normalizedEmail,
         roles: [formData.role]
       });
       navigate('/dashboard');
@@ -73,6 +97,35 @@ const Register = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleStudentEmailNumberChange = (e) => {
+    const numericPart = e.target.value.replace(/\D/g, '');
+    setStudentEmailNumber(numericPart);
+    setFormData({
+      ...formData,
+      email: numericPart ? buildStudentEmail(numericPart) : ''
+    });
+  };
+
+  const handleRoleChange = (role) => {
+    if (role === 'STUDENT') {
+      const matchedStudentEmail = formData.email.match(/^student(\d+)@gmail\.com$/);
+      const numericPart = matchedStudentEmail ? matchedStudentEmail[1] : studentEmailNumber;
+      setStudentEmailNumber(numericPart);
+      setFormData({
+        ...formData,
+        role,
+        email: numericPart ? buildStudentEmail(numericPart) : ''
+      });
+      return;
+    }
+
+    setFormData({
+      ...formData,
+      role,
+      email: ''
+    });
   };
 
   return (
@@ -118,18 +171,42 @@ const Register = () => {
             />
           </div>
 
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 w-5 h-5" />
-            <input
-              name="email"
-              type="email"
-              required
-              className="w-full pl-11 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/40 transition-all"
-              placeholder="name@university.edu"
-              value={formData.email}
-              onChange={handleChange}
-            />
-          </div>
+          {formData.role === 'STUDENT' ? (
+            <div>
+              <label className="block text-sm font-semibold text-white/90 mb-2">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 w-5 h-5" />
+                <div className="w-full pl-11 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white focus-within:ring-2 focus-within:ring-white/30 focus-within:border-white/40 transition-all flex items-center gap-2">
+                  <span className="text-white/80 shrink-0">student</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    required
+                    className="min-w-0 flex-1 bg-transparent border-0 text-white placeholder-white/50 focus:outline-none"
+                    placeholder="XXXXXX"
+                    value={studentEmailNumber}
+                    onChange={handleStudentEmailNumberChange}
+                    aria-label="Student email number"
+                  />
+                  <span className="text-white/80 shrink-0">@gmail.com</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 w-5 h-5" />
+              <input
+                name="email"
+                type="email"
+                required
+                className="w-full pl-11 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/40 transition-all"
+                placeholder="name@example.com"
+                value={formData.email}
+                onChange={handleChange}
+              />
+            </div>
+          )}
 
           <div className="relative">
             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 w-5 h-5" />
@@ -160,7 +237,7 @@ const Register = () => {
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => setFormData({ ...formData, role: 'STUDENT' })}
+              onClick={() => handleRoleChange('STUDENT')}
               className={cn(
                 'py-3 px-4 rounded-xl border font-bold transition-all',
                 formData.role === 'STUDENT'
@@ -172,7 +249,7 @@ const Register = () => {
             </button>
             <button
               type="button"
-              onClick={() => setFormData({ ...formData, role: 'TUTOR' })}
+              onClick={() => handleRoleChange('TUTOR')}
               className={cn(
                 'py-3 px-4 rounded-xl border font-bold transition-all',
                 formData.role === 'TUTOR'

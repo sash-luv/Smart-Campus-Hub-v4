@@ -24,13 +24,17 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.CONFLICT;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+  private static final Pattern VALID_EMAIL_REGEX = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
   private final UserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
@@ -45,6 +49,7 @@ public class AuthService {
     }
     Set<Role> resolvedRoles = resolveRoles(request.getRoles());
     Role primaryRole = resolvePrimaryRole(null, resolvedRoles);
+    validateEmailByRole(request.getEmail(), primaryRole);
 
     User user = User.builder()
         .name(request.getName())
@@ -66,6 +71,15 @@ public class AuthService {
 
   public AuthResponse login(AuthRequest request) {
     log.info("Login attempt for user: {}", request.getEmail());
+
+    if (!VALID_EMAIL_REGEX.matcher(request.getEmail()).matches()) {
+      throw new ResponseStatusException(BAD_REQUEST, "Invalid email address");
+    }
+
+    userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+      Role primaryRole = resolvePrimaryRole(user.getRole(), resolveRoles(user.getRoles()));
+      validateEmailByRole(request.getEmail(), primaryRole);
+    });
 
     try {
       authenticationManager.authenticate(
@@ -157,6 +171,12 @@ public class AuthService {
       return Role.ADMIN;
     }
     return Role.STUDENT;
+  }
+
+  private void validateEmailByRole(String email, Role role) {
+    if (!VALID_EMAIL_REGEX.matcher(email).matches()) {
+      throw new ResponseStatusException(BAD_REQUEST, "Invalid email address");
+    }
   }
 
   private String generateTokenForUser(User user, UserDetails userDetails) {

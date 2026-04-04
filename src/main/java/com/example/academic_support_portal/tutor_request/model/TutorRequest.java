@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// Mongo document storing one tutoring help request submitted by a student.
 public class TutorRequest {
   @Id
   private String id;
@@ -51,6 +52,7 @@ public class TutorRequest {
   @NotBlank(message = "Preferred end time is required")
   private String preferredTimeTo;
 
+  // Request lifecycle status used in student/tutor dashboards.
   private String status; // PENDING, ACCEPTED, REJECTED
 
   private String sessionDateTime;

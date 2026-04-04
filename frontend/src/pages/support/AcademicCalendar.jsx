@@ -1,4 +1,6 @@
+// Simple student calendar view used to display upcoming academic milestones.
 export default function AcademicCalendar() {
+    // Static sample events rendered in a tabular format for quick deadline scanning.
     const events = [
         { name: "First Quiz - Calculus", date: "2026-03-15", category: "Exam" },
         { name: "Project Submission - Web Development", date: "2026-04-02", category: "Assignment" },

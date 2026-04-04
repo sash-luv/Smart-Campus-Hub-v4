@@ -11,7 +11,9 @@ import {
   LogOut,
   Menu,
   X,
-  User as UserIcon
+  User as UserIcon,
+  ClipboardList,
+  ShieldCheck
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -41,6 +43,7 @@ const AppLayout = () => {
   const navigate = useNavigate();
   const role = user?.role || (Array.isArray(user?.roles) ? user.roles[0] : null);
   const isTutor = role === 'TUTOR';
+  const isAdmin = role === 'ADMIN';
 
   const handleLogout = () => {
     logout();
@@ -73,6 +76,17 @@ const AppLayout = () => {
                 <SidebarLink to="/equipment" icon={Wrench}>Equipment</SidebarLink>
                 <SidebarLink to="/environment" icon={Activity}>Environment</SidebarLink>
                 <SidebarLink to="/support" icon={GraduationCap}>Academic Support</SidebarLink>
+
+                {isAdmin && (
+                  <>
+                    <div className="pt-4 pb-1 px-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                        <ShieldCheck size={12} /> Admin
+                      </p>
+                    </div>
+                    <SidebarLink to="/admin/equipment-bookings" icon={ClipboardList}>Equipment Bookings</SidebarLink>
+                  </>
+                )}
               </>
             )}
           </nav>

@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// Mongo document for study library resources uploaded for student support.
 public class AcademicResource {
   @Id
   private String id;
@@ -33,6 +34,7 @@ public class AcademicResource {
   private Long fileSize;
   private boolean downloadable;
 
+  // Hide binary payload from normal JSON list/detail responses.
   @JsonIgnore
   private byte[] fileContent;
   private String fileName;

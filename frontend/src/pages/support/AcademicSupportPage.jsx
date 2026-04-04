@@ -136,7 +136,6 @@ const AcademicSupportPage = () => {
   const [progressRecords, setProgressRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modals / Overlays
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [viewedTutor, setViewedTutor] = useState(null);
   const [chatGroup, setChatGroup] = useState(null);
@@ -298,7 +297,6 @@ const AcademicSupportPage = () => {
     return () => clearTimeout(timer);
   }, [circleSuccess]);
 
-  // Chat Effects
   useEffect(() => {
     let interval;
     if (chatGroup) {

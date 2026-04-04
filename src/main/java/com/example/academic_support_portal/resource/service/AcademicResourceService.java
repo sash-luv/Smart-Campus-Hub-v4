@@ -20,18 +20,22 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// Service layer for resource library business rules: validation, file handling, and persistence.
 public class AcademicResourceService {
   private final AcademicResourceRepository repository;
   private static final long MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
+  // Returns the full resource catalog used by the support library UI.
   public List<AcademicResource> getAll() {
     return repository.findAll();
   }
 
+  // Returns resources for one subject to support subject filtering.
   public List<AcademicResource> getBySubject(String subject) {
     return repository.findBySubject(subject);
   }
 
+  // Creates metadata-based resources and derives defaults for timestamp/type/download flag.
   public AcademicResource create(AcademicResource resource) {
     if (!StringUtils.hasText(resource.getUploadedAt())) {
       resource.setUploadedAt(Instant.now().toString());
@@ -43,6 +47,7 @@ public class AcademicResourceService {
     return repository.save(resource);
   }
 
+  // Validates multipart upload input, maps file metadata, and stores binary content in MongoDB.
   public AcademicResource createWithFile(
       String title,
       String subject,
@@ -88,14 +93,17 @@ public class AcademicResourceService {
     }
   }
 
+  // Fetches a resource by id for detail/download endpoints.
   public AcademicResource getById(String id) {
     return repository.findById(id).orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Resource not found"));
   }
 
+  // Deletes a stored resource record.
   public void delete(String id) {
     repository.deleteById(id);
   }
 
+  // Normalizes content-type for stable type detection and response headers.
   private String normalizeMimeType(String mimeType) {
     if (!StringUtils.hasText(mimeType)) {
       return "application/octet-stream";
@@ -103,6 +111,7 @@ public class AcademicResourceService {
     return mimeType.toLowerCase(Locale.ROOT);
   }
 
+  // Converts MIME types into UI-friendly resource categories.
   private String inferTypeFromMime(String mimeType) {
     if ("application/pdf".equals(mimeType)) {
       return "PDF";
@@ -116,6 +125,7 @@ public class AcademicResourceService {
     return "File";
   }
 
+  // Removes path segments and unsafe filename forms before persistence.
   private String sanitizeFileName(String originalName) {
     if (!StringUtils.hasText(originalName)) {
       return "resource.bin";

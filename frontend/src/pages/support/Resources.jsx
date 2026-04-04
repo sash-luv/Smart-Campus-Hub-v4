@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { resourceApi } from "../../api/supportApi";
 import { SUBJECTS } from "../../utils/constants";
 
+// Student resource library page for browsing and downloading study materials.
 export default function Resources() {
     const [resources, setResources] = useState([]);
     const [loading, setLoading] = useState(true);
     const [subjectFilter, setSubjectFilter] = useState("");
 
+    // Pull resources from backend, optionally narrowed by subject.
     const loadResources = async () => {
         setLoading(true);
         try {
@@ -24,6 +26,7 @@ export default function Resources() {
         loadResources();
     }, [subjectFilter]);
 
+    // Trigger file download endpoint for the selected resource.
     const handleDownload = (id) => {
         resourceApi.download(id);
     };

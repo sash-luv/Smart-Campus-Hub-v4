@@ -41,8 +41,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -271,77 +273,95 @@ public class SeedDataService implements CommandLineRunner {
                                                         .build()));
                 }
 
+                // Relevant images for each equipment item
                 List<Equipment> campusEquipmentCatalog = List.of(
                                 Equipment.builder().name("MacBook Pro").category("Laptops")
                                                 .description("M2 Chip, 16GB RAM")
-                                                .imageUrl("https://picsum.photos/seed/macbookpro/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Dell XPS 15").category("Laptops")
                                                 .description("Intel i7, 32GB RAM, NVIDIA GPU")
-                                                .imageUrl("https://picsum.photos/seed/dellxps15/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("iPad Pro 12.9").category("Tablets")
                                                 .description("Apple Pencil support for design work")
-                                                .imageUrl("https://picsum.photos/seed/ipadpro/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Canon DSLR").category("Cameras")
                                                 .description("4K Video, 24MP")
-                                                .imageUrl("https://picsum.photos/seed/canondslr/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1609921212029-bb5a28e60960?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Sony Mirrorless A7").category("Cameras")
                                                 .description("Full-frame photo and video camera")
-                                                .imageUrl("https://picsum.photos/seed/sonya7/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Projector Portable").category("Accessories")
                                                 .description("HDMI/Wireless")
-                                                .imageUrl("https://picsum.photos/seed/projectorportable/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&q=80&w=900")
                                                 .available(false)
                                                 .status("RESERVED")
                                                 .build(),
                                 Equipment.builder().name("Wireless Presenter").category("Accessories")
                                                 .description("Laser pointer with slide control")
-                                                .imageUrl("https://picsum.photos/seed/wirelesspresenter/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1611532736597-de2d4265fba3?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Audio Recorder Zoom H4n").category("Audio")
                                                 .description("Portable field recorder for interviews")
-                                                .imageUrl("https://picsum.photos/seed/zoomh4n/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("Raspberry Pi Lab Kit").category("Lab Kits")
                                                 .description("Sensors, breadboard, and cables included")
-                                                .imageUrl("https://picsum.photos/seed/raspberrypilabkit/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=900")
                                                 .available(true)
                                                 .status("AVAILABLE")
                                                 .build(),
                                 Equipment.builder().name("VR Headset Quest").category("Simulation")
                                                 .description("Standalone VR kit for immersive labs")
-                                                .imageUrl("https://picsum.photos/seed/vrquest/800/800")
+                                                .imageUrl("https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?auto=format&fit=crop&q=80&w=900")
                                                 .available(false)
                                                 .status("MAINTENANCE")
                                                 .build());
 
+                // Build a name -> imageUrl map from the catalog for easy lookup
+                Map<String, String> catalogImageMap = new HashMap<>();
+                campusEquipmentCatalog.forEach(item -> catalogImageMap.put(item.getName(), item.getImageUrl()));
+
                 Set<String> existingEquipmentNames = new HashSet<>();
                 equipmentRepository.findAll().forEach(item -> existingEquipmentNames.add(item.getName()));
 
+                // Insert any new items not yet in the database
                 List<Equipment> missingEquipment = campusEquipmentCatalog.stream()
                                 .filter(item -> !existingEquipmentNames.contains(item.getName()))
                                 .toList();
-
                 if (!missingEquipment.isEmpty()) {
                         equipmentRepository.saveAll(missingEquipment);
+                }
+
+                // Update image URLs for existing equipment records
+                List<Equipment> toUpdate = new ArrayList<>();
+                equipmentRepository.findAll().forEach(item -> {
+                        String newUrl = catalogImageMap.get(item.getName());
+                        if (newUrl != null && !newUrl.equals(item.getImageUrl())) {
+                                item.setImageUrl(newUrl);
+                                toUpdate.add(item);
+                        }
+                });
+                if (!toUpdate.isEmpty()) {
+                        equipmentRepository.saveAll(toUpdate);
                 }
 
                 if (tutorRepository.count() == 0) {

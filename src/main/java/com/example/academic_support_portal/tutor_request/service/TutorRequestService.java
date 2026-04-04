@@ -32,20 +32,24 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// Business logic for tutor requests: filtering, role checks, status transitions, and notifications.
 public class TutorRequestService {
   private final TutorRequestRepository repository;
   private final TutorRepository tutorRepository;
   private final UserRepository userRepository;
   private final EmailService emailService;
 
+  // Student dashboard query for requests submitted by one student.
   public List<TutorRequest> getByStudentId(String studentId) {
     return repository.findByStudentId(studentId);
   }
 
+  // Tutor query by tutor email (case-insensitive).
   public List<TutorRequest> getByTutorEmail(String tutorEmail) {
     return repository.findByTutorEmailIgnoreCase(tutorEmail);
   }
 
+  // Consolidates request lookup using tutor email, tutor profile id, and tutor name for reliable tutor inbox results.
   public List<TutorRequest> getForCurrentTutor(String tutorEmail, String status) {
     User currentUser = getCurrentUser();
     if (currentUser == null || !hasRole(currentUser, Role.TUTOR)) {
@@ -99,10 +103,12 @@ public class TutorRequestService {
     return requests;
   }
 
+  // Generic list endpoint used by admin/generic views.
   public List<TutorRequest> getAll() {
     return repository.findAll();
   }
 
+  // Creates a tutor request, enriches it with authenticated student data, and attempts email notification.
   public TutorRequestActionResponse create(TutorRequest request) {
     log.info("Starting tutor request creation");
     log.info("Incoming tutor request payload: {}", request);
@@ -165,6 +171,7 @@ public class TutorRequestService {
         .build();
   }
 
+  // Updates request status; ACCEPTED routes through dedicated acceptance validation.
   public TutorRequestActionResponse updateStatus(String id, String status, TutorRequestStatusUpdateRequest payload) {
     TutorRequest req = repository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Request not found"));
@@ -184,6 +191,7 @@ public class TutorRequestService {
         .build();
   }
 
+  // Accepts a request only if the current tutor owns it and required session details are present.
   public TutorRequestActionResponse acceptRequest(String id, TutorRequestStatusUpdateRequest payload) {
     TutorRequest req = repository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Request not found"));
@@ -230,6 +238,7 @@ public class TutorRequestService {
         .build();
   }
 
+  // Rejects a request with the same ownership guard as accept.
   public TutorRequestActionResponse rejectRequest(String id) {
     TutorRequest req = repository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Request not found"));
@@ -254,10 +263,12 @@ public class TutorRequestService {
         .build();
   }
 
+  // Hard delete for cleanup operations.
   public void delete(String id) {
     repository.deleteById(id);
   }
 
+  // Resolves authenticated principal to a user entity for authorization decisions.
   private User getCurrentUser() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
@@ -266,6 +277,7 @@ public class TutorRequestService {
     return userRepository.findByEmail(auth.getName()).orElse(null);
   }
 
+  // Supports both single role and multi-role user storage styles.
   private boolean hasRole(User user, Role role) {
     if (user == null || role == null) {
       return false;
@@ -276,6 +288,7 @@ public class TutorRequestService {
     return user.getRoles() != null && user.getRoles().contains(role);
   }
 
+  // Prevents tutors from accepting/rejecting requests that do not belong to them.
   private boolean isRequestOwnedByTutor(TutorRequest request, User tutorUser) {
     if (request == null || tutorUser == null || !StringUtils.hasText(tutorUser.getEmail())) {
       return false;

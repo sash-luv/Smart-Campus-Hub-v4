@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { tutorRequestApi } from "../../api/supportApi";
 import { useAuth } from "../../context/AuthContext";
 
+// Student-facing request tracker for viewing, filtering, and cancelling tutor requests.
 export default function MyRequests() {
     const { user } = useAuth();
     const [requests, setRequests] = useState([]);
@@ -11,6 +12,7 @@ export default function MyRequests() {
     const [statusFilter, setStatusFilter] = useState("All");
     const [sortOrder, setSortOrder] = useState("desc");
 
+    // Fetch only requests created by the logged-in student.
     const loadRequests = async () => {
         if (!user) return;
         setLoading(true);
@@ -28,6 +30,7 @@ export default function MyRequests() {
         loadRequests();
     }, []);
 
+    // Soft-cancel by switching request status to REJECTED.
     const cancelRequest = async (id) => {
         try {
             await tutorRequestApi.updateStatus(id, "REJECTED");
@@ -37,6 +40,7 @@ export default function MyRequests() {
         }
     };
 
+    // Apply UI filters and sorting so students can quickly find a request.
     const filtered = useMemo(() => {
         let data = [...requests];
         if (statusFilter !== "All") {

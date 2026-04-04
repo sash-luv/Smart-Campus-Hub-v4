@@ -24,5 +24,9 @@ export const equipmentApi = {
   getPendingBookings: async () => {
     const res = await api.get("/equipment/bookings/pending");
     return res.data;
+  },
+  getAllBookings: async () => {
+    const res = await api.get("/equipment/bookings");
+    return res.data;
   }
 };

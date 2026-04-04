@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "study_circles")
+// Core study-circle document used for discovery and membership workflows.
 public class StudyCircle {
   @Id
   private String id;
@@ -29,6 +30,7 @@ public class StudyCircle {
   private String meetingTime;
   private Integer maxMembers;
 
+  // Soft-delete/discovery flag; inactive circles remain in DB but are hidden from active listings.
   @Builder.Default
   private boolean isActive = true;
 

@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Document(collection = "study_circle_members")
 @CompoundIndex(name = "circle_user_unique", def = "{'circleId': 1, 'userId': 1}", unique = true)
+// Membership document that links users to circles with role and join timestamp.
 public class StudyCircleMember {
   @Id
   private String id;
