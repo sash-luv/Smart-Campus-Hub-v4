@@ -139,6 +139,7 @@ const statusBadgeStyles = {
   REJECTED: 'bg-slate-100 text-slate-500 border-slate-200'
 };
 
+// converts a raw date value into a readable string
 const formatDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -167,7 +168,7 @@ const IssueCard = ({ issue, onClick }) => (
       {issue.description}
     </p>
 
-    {/* ✅ NEW: Show image thumbnails in card */}
+    {/*Show image thumbnails in card */}
     {issue.imageUrls && issue.imageUrls.length > 0 && (
       <div className="flex gap-1 mb-3">
         {issue.imageUrls.slice(0, 3).map((img, idx) => (
@@ -187,7 +188,7 @@ const IssueCard = ({ issue, onClick }) => (
       </div>
     )}
 
-    {/* ✅ NEW: Show document indicator */}
+    {/*Show document indicator */}
     {issue.supportingDocs && issue.supportingDocs.length > 0 && (
       <div className="flex items-center gap-1 mb-3 text-xs text-slate-500">
         <FileText size={12} />
